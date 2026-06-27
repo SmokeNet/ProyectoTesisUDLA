@@ -1,0 +1,31 @@
+flowchart LR
+    subgraph Cliente["Cliente"]
+        Dashboard["Dashboard Web\ncomponente"]
+    end
+
+    subgraph Monitoreo["Monitoreo Sintetico"]
+        Playwright["Monitor Playwright\ncomponente"]
+        Sitio["Sitio de Prueba\ncomponente"]
+    end
+
+    subgraph Backend["Backend"]
+        API["API FastAPI\ncomponente"]
+    end
+
+    subgraph Datos["Persistencia"]
+        MySQL[("MySQL\nbase de datos")]
+    end
+
+    subgraph Remediacion["Auto Remediacion"]
+        Rocketbot["Rocketbot\ncomponente"]
+        Paramiko["Modulo Paramiko SSH\ncomponente"]
+        ServidorSSH["Servidor SSH\nnodo externo"]
+    end
+
+    Playwright -->|HTTP GET| Sitio
+    Playwright -->|HTTP POST incidentes| API
+    Dashboard -->|HTTP GET incidentes| API
+    API -->|SQLAlchemy| MySQL
+    Rocketbot -->|Ejecuta| Paramiko
+    Paramiko -->|SSH| ServidorSSH
+    Paramiko -->|HTTP POST incidentes| API

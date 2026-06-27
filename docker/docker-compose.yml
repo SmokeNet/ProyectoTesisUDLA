@@ -1,0 +1,65 @@
+name: prototipo
+
+services:
+  mysql:
+    image: mysql:8
+    container_name: observabilidad-mysql
+    environment:
+      MYSQL_DATABASE: observabilidad
+      MYSQL_USER: observabilidad
+      MYSQL_PASSWORD: observabilidad123
+      MYSQL_ROOT_PASSWORD: root123
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  api:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: observabilidad-api
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      DATABASE_TYPE: mysql
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_DATABASE: observabilidad
+      MYSQL_USER: observabilidad
+      MYSQL_PASSWORD: observabilidad123
+    ports:
+      - "8000:8000"
+
+  sitio-vigilado:
+    build:
+      context: ../Sitio-prueba
+      dockerfile: Dockerfile
+    container_name: sitio-vigilado
+    ports:
+      - "8080:80"
+
+  sitio-respaldo:
+    build:
+      context: ../Sitio-respaldo
+      dockerfile: Dockerfile
+    container_name: sitio-respaldo
+    ports:
+      - "8081:80"
+
+  ssh-remediacion:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.ssh
+    container_name: ssh-remediacion
+    ports:
+      - "2222:22"
+
+volumes:
+  mysql_data:

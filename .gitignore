@@ -1,0 +1,40 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+
+# Entornos virtuales
+venv/
+.venv/
+env/
+
+# Variables y secretos locales
+.env
+*.env
+!docker/.env.example
+
+# Bases de datos o datos locales
+*.db
+*.sqlite
+*.sqlite3
+
+# Evidencias generadas en ejecuciones
+evidencias/**/*.json
+evidencias/**/*.png
+evidencias/**/*.jpg
+evidencias/**/*.jpeg
+evidencias/**/*.log
+!evidencias/.gitkeep
+!evidencias/rocketbot/.gitkeep
+
+# Sistema operativo y editores
+Thumbs.db
+.DS_Store
+.vscode/
+.idea/
+
+# Docker / logs locales
+*.log
+docker-compose.override.yml

@@ -1,0 +1,25 @@
+flowchart LR
+    Administrador["Administrador"]
+    Monitor["Monitor Playwright"]
+    Rocketbot["Rocketbot"]
+
+    subgraph Sistema["Sistema de Observabilidad Sintetica"]
+        CU01(["CU01 Monitorear servicio web"])
+        CU02(["CU02 Registrar incidente"])
+        CU03(["CU03 Consultar incidentes"])
+        CU04(["CU04 Visualizar dashboard"])
+        CU05(["CU05 Ejecutar remediacion"])
+        CU06(["CU06 Ejecutar remediacion desde Rocketbot"])
+    end
+
+    Monitor --- CU01
+    Monitor --- CU02
+
+    Administrador --- CU03
+    Administrador --- CU04
+    Administrador --- CU05
+
+    Rocketbot --- CU06
+
+    CU06 -. incluye .-> CU05
+    CU05 -. incluye .-> CU02

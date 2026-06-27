@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Dashboard de Observabilidad</title>
+    <link
+      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+      rel="stylesheet"
+    >
+    <style>
+      body {
+        background: #f4f6f8;
+        color: #1f2933;
+      }
+
+      .page-shell {
+        max-width: 1180px;
+      }
+
+      .summary-panel {
+        background: #ffffff;
+        border: 1px solid #d9e2ec;
+        border-radius: 8px;
+      }
+
+      .status-pill {
+        border-radius: 999px;
+        display: inline-flex;
+        font-size: 0.82rem;
+        font-weight: 600;
+        line-height: 1;
+        padding: 0.35rem 0.65rem;
+        text-transform: uppercase;
+      }
+
+      .status-error,
+      .status-abierto {
+        background: #fde2e2;
+        color: #9b1c1c;
+      }
+
+      .status-resuelto,
+      .status-ok {
+        background: #dcfce7;
+        color: #166534;
+      }
+
+      .status-contingencia {
+        background: #fef3c7;
+        color: #92400e;
+      }
+
+      .status-critico {
+        background: #fee2e2;
+        color: #7f1d1d;
+      }
+
+      .status-default {
+        background: #e0e8f9;
+        color: #1e3a8a;
+      }
+
+      .table-wrap {
+        background: #ffffff;
+        border: 1px solid #d9e2ec;
+        border-radius: 8px;
+        overflow: hidden;
+      }
+
+      .mensaje-cell {
+        min-width: 320px;
+        white-space: normal;
+      }
+
+      .api-source {
+        font-size: 0.88rem;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="container-fluid page-shell py-4">
+      <header class="mb-4">
+        <h1 class="h3 mb-1">Sistema de Observabilidad Sintetica</h1>
+        <p class="text-secondary mb-0">Dashboard minimo de incidentes registrados</p>
+      </header>
+
+      <section class="summary-panel p-3 mb-4">
+        <div class="row g-3 align-items-center">
+          <div class="col-12 col-md">
+            <span class="text-secondary d-block">Total de incidentes</span>
+            <strong class="display-6" id="totalIncidentes">0</strong>
+            <span class="api-source text-secondary d-block" id="origenApi"></span>
+          </div>
+          <div class="col-12 col-md-auto">
+            <button class="btn btn-primary" id="btnActualizar" type="button">
+              Actualizar
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <div class="alert alert-info" id="estadoCarga" role="status">
+        Cargando incidentes...
+      </div>
+
+      <section class="table-wrap">
+        <div class="table-responsive">
+          <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+              <tr>
+                <th scope="col">ID</th>
+                <th scope="col">Servicio</th>
+                <th scope="col">Estado</th>
+                <th scope="col">Mensaje</th>
+                <th scope="col">Fecha/Hora</th>
+              </tr>
+            </thead>
+            <tbody id="tablaIncidentes">
+              <tr>
+                <td colspan="5" class="text-center text-secondary py-4">
+                  Sin datos para mostrar.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const API_INCIDENTES_URL = "http://127.0.0.1:8000/incidentes";
+      const totalIncidentes = document.getElementById("totalIncidentes");
+      const estadoCarga = document.getElementById("estadoCarga");
+      const tablaIncidentes = document.getElementById("tablaIncidentes");
+      const btnActualizar = document.getElementById("btnActualizar");
+      const origenApi = document.getElementById("origenApi");
+
+      origenApi.textContent = `Origen API: ${API_INCIDENTES_URL}`;
+
+      function escaparHtml(valor) {
+        return String(valor ?? "")
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#039;");
+      }
+
+      function claseEstado(estado) {
+        const estadoNormalizado = String(estado ?? "").toLowerCase();
+
+        if (["error", "abierto"].includes(estadoNormalizado)) {
+          return "status-error";
+        }
+
+        if (["resuelto", "ok"].includes(estadoNormalizado)) {
+          return "status-resuelto";
+        }
+
+        if (["contingencia_activa", "pendiente"].includes(estadoNormalizado)) {
+          return "status-contingencia";
+        }
+
+        if (["error_critico"].includes(estadoNormalizado)) {
+          return "status-critico";
+        }
+
+        return "status-default";
+      }
+
+      function normalizarFechaUtc(fechaHora) {
+        const valor = String(fechaHora).trim();
+        const tieneZonaHoraria = /z$|[+-]\d{2}:\d{2}$/i.test(valor);
+
+        return tieneZonaHoraria ? valor : `${valor}Z`;
+      }
+
+      function formatearFecha(fechaHora) {
+        if (!fechaHora) {
+          return "-";
+        }
+
+        const fecha = new Date(normalizarFechaUtc(fechaHora));
+
+        if (Number.isNaN(fecha.getTime())) {
+          return fechaHora;
+        }
+
+        return fecha.toLocaleString("es-CL", {
+          timeZone: "America/Santiago",
+          dateStyle: "short",
+          timeStyle: "medium",
+        });
+      }
+
+      function renderizarIncidentes(incidentes) {
+        totalIncidentes.textContent = incidentes.length;
+
+        if (incidentes.length === 0) {
+          tablaIncidentes.innerHTML = `
+            <tr>
+              <td colspan="5" class="text-center text-secondary py-4">
+                No hay incidentes registrados.
+              </td>
+            </tr>
+          `;
+          return;
+        }
+
+        const ultimosIncidentes = [...incidentes]
+          .sort((a, b) => Number(b.id) - Number(a.id))
+          .slice(0, 20);
+
+        tablaIncidentes.innerHTML = ultimosIncidentes.map((incidente) => `
+          <tr>
+            <td>${escaparHtml(incidente.id)}</td>
+            <td>${escaparHtml(incidente.servicio)}</td>
+            <td>
+              <span class="status-pill ${claseEstado(incidente.estado)}">
+                ${escaparHtml(incidente.estado)}
+              </span>
+            </td>
+            <td class="mensaje-cell">${escaparHtml(incidente.mensaje)}</td>
+            <td>${escaparHtml(formatearFecha(incidente.fecha_hora))}</td>
+          </tr>
+        `).join("");
+      }
+
+      async function cargarIncidentes() {
+        estadoCarga.className = "alert alert-info";
+        estadoCarga.textContent = "Cargando incidentes...";
+
+        try {
+          const respuesta = await fetch(API_INCIDENTES_URL);
+
+          if (!respuesta.ok) {
+            throw new Error(`La API respondio con codigo HTTP ${respuesta.status}`);
+          }
+
+          const datos = await respuesta.json();
+          const incidentes = Array.isArray(datos.incidentes) ? datos.incidentes : [];
+
+          renderizarIncidentes(incidentes);
+          estadoCarga.className = "alert alert-success";
+          estadoCarga.textContent = "Ultimos incidentes cargados correctamente.";
+        } catch (error) {
+          console.error("Error al consultar incidentes desde la API", error);
+          totalIncidentes.textContent = "0";
+          tablaIncidentes.innerHTML = `
+            <tr>
+              <td colspan="5" class="text-center text-secondary py-4">
+                No fue posible cargar los incidentes.
+              </td>
+            </tr>
+          `;
+          estadoCarga.className = "alert alert-danger";
+          estadoCarga.textContent = `Error al consultar la API: ${error.message}`;
+        }
+      }
+
+      btnActualizar.addEventListener("click", cargarIncidentes);
+      cargarIncidentes();
+    </script>
+  </body>
+</html>

@@ -8,5 +8,6 @@ if exist "venv\Scripts\python.exe" (
   python "continuidad\gestor_continuidad.py"
 )
 
-pause
+set EXIT_CODE=%ERRORLEVEL%
 endlocal
+exit /b %EXIT_CODE%

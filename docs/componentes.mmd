@@ -1,31 +1,10 @@
 flowchart LR
-    subgraph Cliente["Cliente"]
-        Dashboard["Dashboard Web\ncomponente"]
-    end
-
-    subgraph Monitoreo["Monitoreo Sintetico"]
-        Playwright["Monitor Playwright\ncomponente"]
-        Sitio["Sitio de Prueba\ncomponente"]
-    end
-
-    subgraph Backend["Backend"]
-        API["API FastAPI\ncomponente"]
-    end
-
-    subgraph Datos["Persistencia"]
-        MySQL[("MySQL\nbase de datos")]
-    end
-
-    subgraph Remediacion["Auto Remediacion"]
-        Rocketbot["Rocketbot\ncomponente"]
-        Paramiko["Modulo Paramiko SSH\ncomponente"]
-        ServidorSSH["Servidor SSH\nnodo externo"]
-    end
-
-    Playwright -->|HTTP GET| Sitio
-    Playwright -->|HTTP POST incidentes| API
-    Dashboard -->|HTTP GET incidentes| API
-    API -->|SQLAlchemy| MySQL
-    Rocketbot -->|Ejecuta| Paramiko
-    Paramiko -->|SSH| ServidorSSH
-    Paramiko -->|HTTP POST incidentes| API
+    Dashboard["Dashboard Web"] -->|GET paginado| API["FastAPI"]
+    Monitor["Monitor Playwright"] -->|GET y contenido| Sitio["Sitio principal"]
+    Monitor -->|POST autenticado| API
+    API -->|SQLAlchemy| MySQL[("MySQL / red interna")]
+    Rocketbot["Rocketbot / adaptador"] --> Continuidad["Gestor de continuidad"]
+    Continuidad --> Remediador["Remediador Compose / lista blanca"]
+    Remediador --> Sitio
+    Continuidad --> Respaldo["Sitio respaldo / perfil continuidad"]
+    Continuidad --> API

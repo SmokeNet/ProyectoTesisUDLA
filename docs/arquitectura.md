@@ -1,60 +1,33 @@
-# Arquitectura del Prototipo
+# Arquitectura verificada
 
-## Descripcion general
+## Decisiones
 
-El prototipo implementa un flujo minimo de observabilidad sintetica y auto-remediacion. Un sitio web vigilado en Docker actua como objetivo controlado. Playwright monitorea su disponibilidad, registra incidentes en una API FastAPI y la API persiste la informacion en MySQL Docker. El dashboard consulta la API para visualizar incidentes. Rocketbot orquesta el flujo completo y Paramiko ejecuta una remediacion SSH real contra un contenedor de laboratorio.
-
-Flujo final esperado:
-
-```text
-Sitio vigilado Docker -> Playwright -> FastAPI -> MySQL -> Dashboard -> Rocketbot -> Paramiko/SSH Docker
-```
-
-## Diagrama de componentes
+- FastAPI valida y autentica escrituras; las lecturas son paginadas.
+- MySQL vive en una red Docker interna y no expone `3306` al host.
+- El monitor diferencia disponibilidad HTTP de contenido correcto y captura evidencia.
+- El remediador usa una lista blanca y recrea únicamente `sitio-vigilado`.
+- El respaldo pertenece al perfil `continuidad`; no se inicia en operación normal.
+- Rocketbot es la capa RPA de invocación. La lógica comprobable permanece en Python.
 
 ```mermaid
 flowchart LR
-    sitio["Sitio vigilado Docker :8080"]
-    monitor["Playwright Monitor"]
-    api["FastAPI"]
-    mysql["MySQL"]
-    dashboard["Dashboard Web"]
-    rocketbot["Rocketbot"]
-    remediacion["Modulo Remediacion"]
-    ssh["SSH remediacion Docker :2222"]
-
-    monitor --> sitio
-    monitor --> api
-    api --> mysql
-    dashboard --> api
-    rocketbot --> remediacion
-    remediacion --> ssh
-    remediacion --> api
+    R["Rocketbot Studio / adaptador"] --> M["Monitor Playwright"]
+    M --> S["Sitio principal :8080"]
+    M --> A["FastAPI :8000"]
+    A --> D[("MySQL / red interna")]
+    W["Dashboard :5500"] --> A
+    R --> C["Gestor de continuidad"]
+    C --> X["Remediador Compose / lista blanca"]
+    X --> S
+    C --> B["Sitio respaldo :8081 / perfil continuidad"]
+    C --> N["SMTP o evidencia de notificación"]
 ```
 
-## Diagrama de flujo
+## Límites de confianza
 
-```mermaid
-sequenceDiagram
-    participant Sitio as Sitio vigilado
-    participant Playwright as Playwright
-    participant API as FastAPI
-    participant DB as MySQL
-    participant Dashboard as Dashboard
-    participant Rocketbot as Rocketbot
-    participant SSH as SSH Docker
-
-    Playwright->>Sitio: Validar URL monitoreada
-    alt Servicio disponible
-        Playwright->>Playwright: Registrar estado OK en consola
-    else Servicio con error
-        Playwright->>API: POST /incidentes
-        API->>DB: Guardar incidente
-    end
-    Dashboard->>API: GET /incidentes
-    API->>DB: Consultar incidentes
-    API-->>Dashboard: Lista de incidentes
-    Rocketbot->>SSH: Ejecutar remediacion
-    SSH-->>Rocketbot: Resultado
-    Rocketbot->>API: Registrar resultado
-```
+La API no es un sistema multiusuario: existe una credencial técnica para escritura,
+no identidades humanas ni autorización por roles. La gestión de Docker se ejecuta
+desde el host, deliberadamente, para no entregar el socket privilegiado a un
+contenedor. Rocketbot Studio debe configurarse para invocar el `.bat`; el repositorio
+no contiene un robot propietario exportado, por lo que no se afirma que esa interfaz
+visual esté automatizada sin dicha configuración.

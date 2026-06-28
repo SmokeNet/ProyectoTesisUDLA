@@ -28,6 +28,8 @@ evidencias/**/*.jpeg
 evidencias/**/*.log
 !evidencias/.gitkeep
 !evidencias/rocketbot/.gitkeep
+!evidencias/continuidad/.gitkeep
+!evidencias/monitor/.gitkeep
 
 # Sistema operativo y editores
 Thumbs.db

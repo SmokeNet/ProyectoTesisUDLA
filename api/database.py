@@ -1,94 +1,128 @@
+"""Configuracion y ciclo de vida de la conexion SQLAlchemy."""
+
+import logging
 import os
 import time
-from typing import Any
+from collections.abc import Generator
 
-from sqlalchemy import create_engine, text
+from sqlalchemy import URL, create_engine, inspect, text
+from sqlalchemy.engine import Engine
 from sqlalchemy.exc import OperationalError
-from sqlalchemy.orm import DeclarativeBase, sessionmaker
+from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
+
+LOGGER = logging.getLogger(__name__)
 
 
-DATABASE_TYPE = os.getenv("DATABASE_TYPE", "mysql").lower().strip()
+def _entero_positivo(nombre: str, predeterminado: int) -> int:
+    """Lee un entero positivo desde el entorno con un error comprensible."""
+    valor = os.getenv(nombre, str(predeterminado))
+    try:
+        numero = int(valor)
+    except ValueError as error:
+        raise ValueError(f"{nombre} debe ser un numero entero.") from error
+    if numero < 1:
+        raise ValueError(f"{nombre} debe ser mayor que cero.")
+    return numero
 
-if DATABASE_TYPE != "mysql":
-    raise ValueError("Este prototipo usa solo MySQL. Configure DATABASE_TYPE=mysql.")
 
-MYSQL_HOST = os.getenv("MYSQL_HOST", "mysql")
-MYSQL_PORT = os.getenv("MYSQL_PORT", "3306")
-MYSQL_DATABASE = os.getenv("MYSQL_DATABASE", "observabilidad")
-MYSQL_USER = os.getenv("MYSQL_USER", "observabilidad")
-MYSQL_PASSWORD = os.getenv("MYSQL_PASSWORD", "observabilidad123")
-DATABASE_URL = (
-    f"mysql+pymysql://{MYSQL_USER}:{MYSQL_PASSWORD}"
-    f"@{MYSQL_HOST}:{MYSQL_PORT}/{MYSQL_DATABASE}"
+def _variable_requerida(nombre: str) -> str:
+    valor = os.getenv(nombre, "").strip()
+    if not valor:
+        raise RuntimeError(f"Falta la variable de entorno requerida: {nombre}")
+    return valor
+
+
+MYSQL_HOST = os.getenv("MYSQL_HOST", "mysql").strip()
+MYSQL_PORT = _entero_positivo("MYSQL_PORT", 3306)
+MYSQL_DATABASE = os.getenv("MYSQL_DATABASE", "observabilidad").strip()
+MYSQL_USER = _variable_requerida("MYSQL_USER")
+MYSQL_PASSWORD = _variable_requerida("MYSQL_PASSWORD")
+
+# URL.create escapa correctamente usuarios y contrasenas con caracteres especiales.
+DATABASE_URL = URL.create(
+    "mysql+pymysql",
+    username=MYSQL_USER,
+    password=MYSQL_PASSWORD,
+    host=MYSQL_HOST,
+    port=MYSQL_PORT,
+    database=MYSQL_DATABASE,
+    query={"charset": "utf8mb4"},
 )
 
-
-# Engine de SQLAlchemy para conectar con MySQL.
-engine = create_engine(DATABASE_URL, pool_pre_ping=True)
-
-
-# Fabrica de sesiones para leer y escribir en la base de datos.
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+engine: Engine = create_engine(
+    DATABASE_URL,
+    pool_pre_ping=True,
+    pool_recycle=_entero_positivo("DATABASE_POOL_RECYCLE_SECONDS", 1800),
+    pool_size=_entero_positivo("DATABASE_POOL_SIZE", 5),
+    max_overflow=_entero_positivo("DATABASE_MAX_OVERFLOW", 10),
+)
+SessionLocal = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)
 
 
 class Base(DeclarativeBase):
     """Clase base para los modelos de SQLAlchemy."""
 
 
+def obtener_db() -> Generator[Session, None, None]:
+    """Entrega una sesion por solicitud y garantiza su cierre."""
+    with SessionLocal() as sesion:
+        yield sesion
+
+
+def comprobar_conexion() -> None:
+    """Ejecuta una consulta real y falla si MySQL no responde."""
+    with engine.connect() as conexion:
+        conexion.execute(text("SELECT 1"))
+
+
 def esperar_base_datos() -> None:
-    """Espera a que la base de datos acepte conexiones."""
-    intentos = int(os.getenv("DATABASE_CONNECT_RETRIES", "10"))
-    espera_segundos = int(os.getenv("DATABASE_CONNECT_WAIT_SECONDS", "3"))
+    """Espera MySQL con una cantidad finita de reintentos."""
+    intentos = _entero_positivo("DATABASE_CONNECT_RETRIES", 10)
+    espera_segundos = _entero_positivo("DATABASE_CONNECT_WAIT_SECONDS", 3)
 
     for intento in range(1, intentos + 1):
         try:
-            with engine.connect() as conexion:
-                conexion.execute(text("SELECT 1"))
-            print("Conexion a base de datos disponible.", flush=True)
+            comprobar_conexion()
+            LOGGER.info("Conexion MySQL disponible")
             return
-        except OperationalError as error:
+        except OperationalError:
             if intento == intentos:
-                print(
-                    "No fue posible conectar con la base de datos "
-                    "MySQL despues de "
-                    f"{intentos} intentos. host={MYSQL_HOST} "
-                    f"port={MYSQL_PORT} database={MYSQL_DATABASE}",
-                    flush=True,
+                LOGGER.exception(
+                    "MySQL no disponible tras %s intentos (host=%s port=%s database=%s)",
+                    intentos,
+                    MYSQL_HOST,
+                    MYSQL_PORT,
+                    MYSQL_DATABASE,
                 )
                 raise
-
-            print(
-                "Base de datos no disponible "
-                f"(intento {intento}/{intentos}): {error}",
-                flush=True,
-            )
+            LOGGER.warning("MySQL no disponible; reintento %s/%s", intento, intentos)
             time.sleep(espera_segundos)
 
 
 def crear_tablas() -> None:
-    """Crea las tablas definidas si todavia no existen."""
+    """Crea el esquema y aplica mejoras idempotentes a instalaciones existentes."""
     esperar_base_datos()
     Base.metadata.create_all(bind=engine)
-
-
-def obtener_info_base_datos() -> dict[str, Any]:
-    """Retorna informacion segura sobre la base configurada."""
-    return {
-        "engine": "mysql",
-        "host": MYSQL_HOST,
-        "port": MYSQL_PORT,
-        "database": MYSQL_DATABASE,
-        "user": MYSQL_USER,
+    inspector = inspect(engine)
+    indices = {indice["name"] for indice in inspector.get_indexes("incidentes")}
+    restricciones = {
+        restriccion["name"]
+        for restriccion in inspector.get_check_constraints("incidentes")
     }
-
-
-def mostrar_configuracion_base_datos() -> None:
-    """Muestra en logs la configuracion de base usada por la API."""
-    info = obtener_info_base_datos()
-
-    print(
-        "Base de datos configurada: "
-        f"engine=mysql host={info['host']} port={info['port']} "
-        f"database={info['database']} user={info['user']}",
-        flush=True,
-    )
+    with engine.begin() as conexion:
+        if "ix_incidentes_fecha_hora_id" not in indices:
+            conexion.execute(
+                text("CREATE INDEX ix_incidentes_fecha_hora_id ON incidentes (fecha_hora, id)")
+            )
+        if "ix_incidentes_servicio_estado" not in indices:
+            conexion.execute(
+                text("CREATE INDEX ix_incidentes_servicio_estado ON incidentes (servicio, estado)")
+            )
+        if "ck_incidentes_estado_valido" not in restricciones:
+            conexion.execute(
+                text(
+                    "ALTER TABLE incidentes ADD CONSTRAINT ck_incidentes_estado_valido "
+                    "CHECK (estado IN ('abierto','contingencia_activa','error',"
+                    "'error_critico','ok','pendiente','resuelto'))"
+                )
+            )

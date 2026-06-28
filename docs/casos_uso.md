@@ -1,98 +1,32 @@
-# Casos de Uso
+# Casos de uso verificados
 
-## CU01 Monitorear servicio web
+## CU01 Monitorear servicio
 
-**Actor:** Monitor Playwright.
+Playwright navega, comprueba código HTTP y texto esperado, mide duración y retorna
+un código de proceso. Ante falla intenta capturar PNG y registrar un evento.
 
-**Precondicion:** La URL monitoreada esta configurada.
+## CU02 Registrar evento
 
-**Flujo principal:**
-1. El monitor abre la URL configurada.
-2. Playwright espera la respuesta de navegacion.
-3. El monitor obtiene el codigo HTTP cuando esta disponible.
-4. El monitor mide el tiempo de respuesta.
-5. El monitor muestra estado OK en consola.
+Un componente envía JSON con `X-API-Key`. La API rechaza credenciales, campos extra,
+vacíos, estados desconocidos y longitudes fuera de contrato; confirma con HTTP 201.
 
-**Flujo alternativo:** Si ocurre timeout, error DNS, error HTTP o fallo de navegacion, el monitor genera un mensaje descriptivo y registra un incidente en la API.
+## CU03 Consultar y visualizar
 
-**Postcondicion:** El resultado del monitoreo queda informado en consola y, si falla, registrado como incidente.
+El operador consulta páginas de hasta 100 eventos. El dashboard solicita 20,
+presenta el total, escapa datos y muestra errores o timeouts.
 
-## CU02 Registrar incidente
+## CU04 Recuperar servicio
 
-**Actor:** Playwright, remediador o usuario tecnico.
+Tras confirmar una caída, el gestor invoca el remediador. Este acepta únicamente
+`sitio-vigilado`, lo recrea con Compose y el gestor vuelve a comprobarlo.
 
-**Precondicion:** La API FastAPI esta activa y conectada a la base de datos.
+## CU05 Activar contingencia
 
-**Flujo principal:**
-1. El actor envia `POST /incidentes`.
-2. La API valida los campos `servicio`, `estado` y `mensaje`.
-3. La API guarda el incidente en la base de datos.
-4. La API retorna el incidente creado con `id` y `fecha_hora`.
+Si CU04 no recupera el principal, se inicia el perfil `continuidad`, se valida el
+respaldo y se registra/notifica la decisión. Si también falla, se escala manualmente.
 
-**Flujo alternativo:** Si la base de datos no esta disponible, la API retorna error y el incidente no se persiste.
+## CU06 Orquestar desde Rocketbot
 
-**Postcondicion:** El incidente queda almacenado en la tabla `incidentes`.
-
-## CU03 Consultar incidentes
-
-**Actor:** Usuario tecnico, dashboard o herramienta externa.
-
-**Precondicion:** Existen cero o mas incidentes registrados.
-
-**Flujo principal:**
-1. El actor solicita `GET /incidentes`.
-2. La API consulta la tabla `incidentes`.
-3. La API retorna la lista ordenada por `id`.
-
-**Flujo alternativo:** Si la base de datos no responde, la API informa error.
-
-**Postcondicion:** El actor recibe la lista actual de incidentes.
-
-## CU04 Visualizar dashboard
-
-**Actor:** Usuario tecnico.
-
-**Precondicion:** La API esta activa y permite consultas desde el navegador.
-
-**Flujo principal:**
-1. El usuario abre el dashboard HTML.
-2. El dashboard consulta `GET /incidentes`.
-3. El dashboard calcula el total de incidentes.
-4. El dashboard renderiza la tabla con los campos principales.
-
-**Flujo alternativo:** Si la API no responde o el navegador bloquea la peticion, el dashboard muestra un mensaje de error.
-
-**Postcondicion:** El usuario visualiza el estado actual de incidentes.
-
-## CU05 Ejecutar remediacion
-
-**Actor:** Usuario tecnico.
-
-**Precondicion:** Las variables SSH del remediador estan configuradas.
-
-**Flujo principal:**
-1. El usuario ejecuta `remediador.py`.
-2. Paramiko intenta conectar al host SSH.
-3. El remediador ejecuta el comando configurado.
-4. El remediador muestra resultado y fecha/hora.
-5. El remediador registra el resultado en la API.
-
-**Flujo alternativo:** Si falla la conexion SSH o el comando, el remediador registra el error en la API.
-
-**Postcondicion:** El resultado de remediacion queda visible en consola y registrado como incidente o evento.
-
-## CU06 Ejecutar remediacion desde Rocketbot
-
-**Actor:** Rocketbot.
-
-**Precondicion:** Rocketbot tiene configurado el flujo para invocar el remediador.
-
-**Flujo principal:**
-1. Rocketbot detecta o recibe una condicion de remediacion.
-2. Rocketbot ejecuta el modulo de remediacion.
-3. El remediador usa Paramiko para ejecutar acciones por SSH.
-4. El resultado se registra en la API.
-
-**Flujo alternativo:** Si Rocketbot no puede ejecutar el modulo, se informa el error en la evidencia del flujo.
-
-**Postcondicion:** La remediacion queda ejecutada o documentada como fallida.
+Rocketbot Studio invoca el adaptador `.bat`; este conserva códigos, salidas y tiempos
+de cada módulo en una evidencia JSON. La ejecución visual requiere configurar y
+mostrar el robot real durante la defensa.

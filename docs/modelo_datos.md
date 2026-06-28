@@ -1,33 +1,20 @@
-# Modelo de Datos
+# Modelo de datos
 
-## Tabla `incidentes`
+La tabla `incidentes` representa eventos inmutables de los componentes.
 
-La tabla `incidentes` almacena eventos generados por la API, Playwright y el modulo de remediacion.
-
-| Campo | Tipo | Descripcion |
+| Campo | Tipo | Regla |
 | --- | --- | --- |
-| `id` | Integer | Identificador unico del incidente. Clave primaria. |
-| `servicio` | String(100) | Nombre del servicio o modulo que reporta el evento. |
-| `estado` | String(50) | Estado del incidente o evento, por ejemplo `ok`, `error`, `abierto`. |
-| `mensaje` | String(1000) | Descripcion del evento registrado. |
-| `fecha_hora` | DateTime | Fecha y hora de creacion del registro. |
+| `id` | INTEGER | clave primaria |
+| `servicio` | VARCHAR(100) | requerido; índice compuesto con estado |
+| `estado` | VARCHAR(50) | requerido; conjunto cerrado |
+| `mensaje` | VARCHAR(1000) | requerido |
+| `fecha_hora` | DATETIME UTC | requerido; índice compuesto con id |
 
-## Modelo ER
+Estados: `abierto`, `error`, `ok`, `resuelto`, `pendiente`,
+`contingencia_activa` y `error_critico`. Pydantic valida antes de persistir y el
+modelo declara además un `CHECK`. MySQL se alcanza solo desde la red `datos`; para
+administración se usa `docker compose exec mysql`, no un puerto publicado.
 
-```mermaid
-erDiagram
-    INCIDENTES {
-        int id PK
-        string servicio
-        string estado
-        string mensaje
-        datetime fecha_hora
-    }
-```
-
-## Consideraciones
-
-- La persistencia oficial del prototipo es MySQL en Docker.
-- La API usa `DATABASE_TYPE=mysql`.
-- La base de datos se llama `observabilidad`.
-- El contenedor MySQL expone el puerto `3306`.
+El prototipo tiene una sola entidad y no necesita claves foráneas. Para un sistema
+mayor convendría separar incidentes, servicios y transiciones, pero hacerlo aquí
+añadiría complejidad sin una relación de dominio que la justifique.

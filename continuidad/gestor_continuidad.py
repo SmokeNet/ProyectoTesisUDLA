@@ -1,6 +1,7 @@
 import json
 import os
 import smtplib
+import ssl
 import subprocess
 import sys
 import time
@@ -14,10 +15,24 @@ from urllib.request import Request, urlopen
 RAIZ = Path(__file__).resolve().parents[1]
 DOCKER_COMPOSE_FILE = RAIZ / "docker" / "docker-compose.yml"
 
+
+def _cargar_entorno_local() -> None:
+    ruta = RAIZ / "docker" / ".env"
+    if not ruta.exists():
+        return
+    for linea in ruta.read_text(encoding="utf-8").splitlines():
+        if linea and not linea.lstrip().startswith("#") and "=" in linea:
+            nombre, valor = linea.split("=", 1)
+            os.environ.setdefault(nombre.strip(), valor.strip())
+
+
+_cargar_entorno_local()
+
 URL_PRINCIPAL = os.getenv("URL_PRINCIPAL", os.getenv("URL_MONITOREADA", "http://127.0.0.1:8080/"))
 URL_RESPALDO = os.getenv("URL_RESPALDO", "http://127.0.0.1:8081/")
 API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000").rstrip("/")
 API_INCIDENTES_URL = os.getenv("API_INCIDENTES_URL", f"{API_BASE_URL}/incidentes")
+API_WRITE_KEY = os.getenv("API_WRITE_KEY", "")
 
 INTENTOS_VALIDACION = int(os.getenv("INTENTOS_VALIDACION", "2"))
 SEGUNDOS_ENTRE_INTENTOS = int(os.getenv("SEGUNDOS_ENTRE_INTENTOS", "3"))
@@ -32,7 +47,7 @@ SMTP_TO = os.getenv("SMTP_TO", "")
 
 
 class ResultadoUrl(dict):
-    pass
+    """Resultado serializable de una comprobacion HTTP."""
 
 
 def fecha_hora_actual() -> str:
@@ -46,6 +61,9 @@ def limitar_texto(texto: str, largo_maximo: int = 950) -> str:
 
 
 def registrar_incidente(servicio: str, estado: str, mensaje: str) -> None:
+    if not API_WRITE_KEY:
+        print("No se pudo registrar incidente: API_WRITE_KEY no configurada")
+        return
     payload = {
         "servicio": servicio,
         "estado": estado,
@@ -54,7 +72,7 @@ def registrar_incidente(servicio: str, estado: str, mensaje: str) -> None:
     request = Request(
         API_INCIDENTES_URL,
         data=json.dumps(payload).encode("utf-8"),
-        headers={"Content-Type": "application/json"},
+        headers={"Content-Type": "application/json", "X-API-Key": API_WRITE_KEY},
         method="POST",
     )
 
@@ -89,7 +107,7 @@ def validar_url(url: str, nombre: str) -> ResultadoUrl:
                 detalle="URL disponible",
                 muestra=cuerpo,
             )
-    except Exception as error:
+    except (HTTPError, URLError, TimeoutError, ValueError) as error:
         duracion = time.perf_counter() - inicio
         return ResultadoUrl(
             estado="error",
@@ -121,7 +139,7 @@ def obtener_python() -> str:
     return sys.executable
 
 
-def ejecutar_remediacion_ssh() -> dict[str, object]:
+def ejecutar_remediacion() -> dict[str, object]:
     script = RAIZ / "remediacion" / "remediador.py"
     python_cmd = obtener_python()
     if not script.exists():
@@ -130,15 +148,18 @@ def ejecutar_remediacion_ssh() -> dict[str, object]:
             "detalle": "No existe remediacion/remediador.py",
         }
 
-    proceso = subprocess.run(
-        [python_cmd, script.name],
-        cwd=script.parent,
-        capture_output=True,
-        text=True,
-        timeout=90,
-        check=False,
-        env=os.environ.copy(),
-    )
+    try:
+        proceso = subprocess.run(
+            [python_cmd, script.name],
+            cwd=script.parent,
+            capture_output=True,
+            text=True,
+            timeout=150,
+            check=False,
+            env=os.environ.copy(),
+        )
+    except (OSError, subprocess.TimeoutExpired) as error:
+        return {"estado": "error", "detalle": str(error)}
     return {
         "estado": "ok" if proceso.returncode == 0 else "error",
         "codigo_salida": proceso.returncode,
@@ -176,7 +197,7 @@ def activar_sitio_respaldo() -> dict[str, object]:
             "stdout": proceso.stdout.strip(),
             "stderr": proceso.stderr.strip(),
         }
-    except Exception as error:
+    except (OSError, subprocess.TimeoutExpired) as error:
         return {
             "estado": "error",
             "comando": " ".join(comando),
@@ -201,13 +222,13 @@ def enviar_notificacion_humana(asunto: str, cuerpo: str) -> dict[str, object]:
 
     try:
         with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=20) as smtp:
-            smtp.starttls()
+            smtp.starttls(context=ssl.create_default_context())
             if SMTP_USER and SMTP_PASSWORD:
                 smtp.login(SMTP_USER, SMTP_PASSWORD)
             smtp.send_message(mensaje)
         registrar_incidente("notificacion-humana", "ok", f"Correo enviado a {SMTP_TO}: {asunto}")
         return {"estado": "ok", "destinatario": SMTP_TO}
-    except Exception as error:
+    except (OSError, smtplib.SMTPException) as error:
         registrar_incidente("notificacion-humana", "error", f"Fallo envio de correo: {error}")
         return {"estado": "error", "detalle": str(error)}
 
@@ -254,21 +275,28 @@ def ejecutar_continuidad() -> int:
         f"Sitio principal indisponible: {validacion_inicial['detalle']}",
     )
 
-    remediacion = ejecutar_remediacion_ssh()
-    evidencia["pasos"].append({"paso": "remediacion_ssh", **remediacion})
+    remediacion = ejecutar_remediacion()
+    evidencia["pasos"].append({"paso": "remediacion_compose", **remediacion})
 
     validacion_post_remediacion = validar_url_con_reintentos(URL_PRINCIPAL, "sitio-principal-post-remediacion")
     evidencia["pasos"].append({"paso": "validacion_post_remediacion", **validacion_post_remediacion})
 
     if validacion_post_remediacion["estado"] == "ok":
-        mensaje = "Sitio principal recuperado despues de la remediacion SSH."
+        mensaje = "Sitio principal recuperado despues de la remediacion Docker Compose."
         registrar_incidente("continuidad-operacional", "resuelto", mensaje)
         notificacion = enviar_notificacion_humana(
             "Servicio principal recuperado automaticamente",
-            f"El sitio {URL_PRINCIPAL} fue recuperado por el proceso de auto-remediacion.\nFecha: {fecha_hora_actual()}",
+            f"El sitio {URL_PRINCIPAL} fue recuperado por el proceso "
+            f"de auto-remediacion.\nFecha: {fecha_hora_actual()}",
         )
         evidencia["pasos"].append({"paso": "notificacion_humana", **notificacion})
-        evidencia.update({"estado_general": "ok", "decision": "sitio_principal_recuperado", "fin": fecha_hora_actual()})
+        evidencia.update(
+            {
+                "estado_general": "ok",
+                "decision": "sitio_principal_recuperado",
+                "fin": fecha_hora_actual(),
+            }
+        )
         ruta = guardar_evidencia(evidencia)
         print(mensaje)
         print(f"Evidencia JSON: {ruta.relative_to(RAIZ)}")
@@ -297,7 +325,13 @@ def ejecutar_continuidad() -> int:
         )
         notificacion = enviar_notificacion_humana(asunto, cuerpo)
         evidencia["pasos"].append({"paso": "notificacion_humana", **notificacion})
-        evidencia.update({"estado_general": "contingencia_activa", "decision": "activar_respaldo", "fin": fecha_hora_actual()})
+        evidencia.update(
+            {
+                "estado_general": "contingencia_activa",
+                "decision": "activar_respaldo",
+                "fin": fecha_hora_actual(),
+            }
+        )
         ruta = guardar_evidencia(evidencia)
         print("Contingencia activa. Sitio de respaldo disponible.")
         print(f"Evidencia JSON: {ruta.relative_to(RAIZ)}")
@@ -310,10 +344,17 @@ def ejecutar_continuidad() -> int:
     )
     notificacion = enviar_notificacion_humana(
         "Alerta critica: sitio principal y respaldo no disponibles",
-        f"No fue posible recuperar {URL_PRINCIPAL} ni activar {URL_RESPALDO}. Fecha: {fecha_hora_actual()}",
+        f"No fue posible recuperar {URL_PRINCIPAL} ni activar {URL_RESPALDO}. "
+        f"Fecha: {fecha_hora_actual()}",
     )
     evidencia["pasos"].append({"paso": "notificacion_humana", **notificacion})
-    evidencia.update({"estado_general": "error_critico", "decision": "escalamiento_manual", "fin": fecha_hora_actual()})
+    evidencia.update(
+        {
+            "estado_general": "error_critico",
+            "decision": "escalamiento_manual",
+            "fin": fecha_hora_actual(),
+        }
+    )
     ruta = guardar_evidencia(evidencia)
     print("Error critico. Requiere intervencion humana inmediata.")
     print(f"Evidencia JSON: {ruta.relative_to(RAIZ)}")

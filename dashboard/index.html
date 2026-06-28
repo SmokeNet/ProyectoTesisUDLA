@@ -6,6 +6,8 @@
     <title>Dashboard de Observabilidad</title>
     <link
       href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
+      integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH"
+      crossorigin="anonymous"
       rel="stylesheet"
     >
     <style>
@@ -129,7 +131,7 @@
     </main>
 
     <script>
-      const API_INCIDENTES_URL = "http://127.0.0.1:8000/incidentes";
+      const API_INCIDENTES_URL = "http://127.0.0.1:8000/incidentes?limit=20&offset=0";
       const totalIncidentes = document.getElementById("totalIncidentes");
       const estadoCarga = document.getElementById("estadoCarga");
       const tablaIncidentes = document.getElementById("tablaIncidentes");
@@ -194,8 +196,8 @@
         });
       }
 
-      function renderizarIncidentes(incidentes) {
-        totalIncidentes.textContent = incidentes.length;
+      function renderizarIncidentes(incidentes, total) {
+        totalIncidentes.textContent = total;
 
         if (incidentes.length === 0) {
           tablaIncidentes.innerHTML = `
@@ -208,11 +210,7 @@
           return;
         }
 
-        const ultimosIncidentes = [...incidentes]
-          .sort((a, b) => Number(b.id) - Number(a.id))
-          .slice(0, 20);
-
-        tablaIncidentes.innerHTML = ultimosIncidentes.map((incidente) => `
+        tablaIncidentes.innerHTML = incidentes.map((incidente) => `
           <tr>
             <td>${escaparHtml(incidente.id)}</td>
             <td>${escaparHtml(incidente.servicio)}</td>
@@ -228,20 +226,29 @@
       }
 
       async function cargarIncidentes() {
+        const controlador = new AbortController();
+        const timeout = setTimeout(() => controlador.abort(), 8000);
+        btnActualizar.disabled = true;
+        estadoCarga.setAttribute("aria-busy", "true");
         estadoCarga.className = "alert alert-info";
         estadoCarga.textContent = "Cargando incidentes...";
 
         try {
-          const respuesta = await fetch(API_INCIDENTES_URL);
+          const respuesta = await fetch(API_INCIDENTES_URL, {
+            headers: { Accept: "application/json" },
+            signal: controlador.signal,
+          });
 
           if (!respuesta.ok) {
             throw new Error(`La API respondio con codigo HTTP ${respuesta.status}`);
           }
 
           const datos = await respuesta.json();
-          const incidentes = Array.isArray(datos.incidentes) ? datos.incidentes : [];
+          if (!Array.isArray(datos.incidentes) || !Number.isInteger(datos.total)) {
+            throw new Error("La API entrego una estructura inesperada");
+          }
 
-          renderizarIncidentes(incidentes);
+          renderizarIncidentes(datos.incidentes, datos.total);
           estadoCarga.className = "alert alert-success";
           estadoCarga.textContent = "Ultimos incidentes cargados correctamente.";
         } catch (error) {
@@ -255,7 +262,12 @@
             </tr>
           `;
           estadoCarga.className = "alert alert-danger";
-          estadoCarga.textContent = `Error al consultar la API: ${error.message}`;
+          const detalle = error.name === "AbortError" ? "tiempo de espera agotado" : error.message;
+          estadoCarga.textContent = `Error al consultar la API: ${detalle}`;
+        } finally {
+          clearTimeout(timeout);
+          btnActualizar.disabled = false;
+          estadoCarga.removeAttribute("aria-busy");
         }
       }
 

@@ -1,154 +1,122 @@
-# Sistema de Observabilidad Sintetica, Auto-Remediacion y Continuidad Operacional
+# Observabilidad sintética y continuidad operacional
 
-Prototipo funcional para tesis de Ingenieria de Ejecucion en Informatica.
+Prototipo académico que supervisa un sitio web, registra eventos en FastAPI/MySQL,
+los presenta en un dashboard y ejecuta una recuperación controlada con Docker
+Compose. Si la recuperación no resulta, activa un sitio de respaldo y deja evidencia
+JSON. `rocketbot/robot_observabilidad.py` es el adaptador invocado desde Rocketbot
+Studio o desde los lanzadores de Windows.
 
-El proyecto implementa un flujo de observabilidad sintetica para validar la disponibilidad de un sitio web, registrar incidentes en una API, persistirlos en MySQL Docker, visualizarlos en un dashboard y ejecutar una remediacion SSH controlada mediante Paramiko. La version actual incorpora continuidad operacional automatizada: cuando el sitio principal permanece caido despues de la remediacion, se levanta un sitio de respaldo, se registra la trazabilidad y se notifica a un responsable humano. Rocketbot actua como capa RPA de orquestacion para ejecutar el flujo completo y generar evidencias.
-
-## Arquitectura
+## Flujo real
 
 ```text
-Sitio principal Docker :8080
-        ↓
-Monitor Playwright
-        ↓
-API FastAPI :8000 → MySQL Docker :3306 → Dashboard :5500
-        ↓
-Rocketbot / Gestor de continuidad
-        ↓
-Paramiko / SSH Docker :2222
-        ↓
-¿Servicio recuperado?
-        ↓ No
-Sitio de respaldo Docker :8081 + notificacion humana
+Playwright -> sitio principal :8080
+       | falla
+       v
+FastAPI :8000 -> MySQL (solo red Docker) -> dashboard :5500
+       |
+       v
+gestor de continuidad -> recrear sitio principal -> volver a comprobar
+       | sigue caído
+       v
+activar perfil continuidad / sitio de respaldo :8081 / notificar / evidenciar
 ```
+
+La remediación acepta únicamente el servicio `sitio-vigilado`; no ejecuta texto
+arbitrario ni monta el socket Docker dentro de un contenedor. La versión anterior
+abría una sesión SSH que solo hacía `echo`: eso comprobaba conectividad, pero no
+recuperaba el servicio, por lo que fue retirado como afirmación funcional.
 
 ## Componentes
 
-| Carpeta | Descripcion |
+| Ruta | Responsabilidad |
 | --- | --- |
-| `api/` | API FastAPI, modelo SQLAlchemy y conexion MySQL |
-| `dashboard/` | Dashboard HTML, Bootstrap y JavaScript Vanilla |
-| `docker/` | Dockerfile de API, Dockerfile SSH y Docker Compose |
-| `playwright-monitor/` | Monitor sintetico con Playwright |
-| `continuidad/` | Gestor de continuidad operacional: valida, remedia, activa respaldo y notifica |
-| `remediacion/` | Remediador SSH con Paramiko |
-| `rocketbot/` | Orquestador para Rocketbot Studio mediante `.bat` |
-| `Sitio-prueba/` | Sitio web principal vigilado por Playwright |
-| `Sitio-respaldo/` | Sitio de contingencia activado cuando el principal no se recupera |
-| `docs/` | Documentacion tecnica y comandos de defensa |
-| `evidencias/` | Carpeta preparada para evidencias generadas en ejecucion |
+| `api/` | API, validación, persistencia y readiness |
+| `playwright-monitor/` | prueba de HTTP, contenido, latencia y captura de error |
+| `remediacion/` | recuperación con lista blanca mediante Compose |
+| `continuidad/` | decisión, reintentos, respaldo, correo y evidencia |
+| `rocketbot/` | adaptador/orquestador para Rocketbot Studio y Windows |
+| `dashboard/` | vista paginada y protegida contra inyección HTML |
+| `docker/` | servicios, redes, healthchecks y configuración local |
+| `tests/` | pruebas unitarias sin infraestructura externa |
+| `docs/` | arquitectura, pruebas, defensa e informe de auditoría |
 
-## Requisitos
+## Preparación
 
-- Docker Desktop para Windows
-- Python 3.14
-- PowerShell
-- Navegadores de Playwright instalados en el entorno local
-
-Instalar dependencias locales:
+Requisitos: Docker Desktop, Python 3.14 y PowerShell.
 
 ```powershell
+Copy-Item docker\.env.example docker\.env
+# Edite docker\.env y reemplace todos los valores "cambiar_...".
 python -m venv venv
 .\venv\Scripts\python.exe -m pip install -r requirements.txt
 .\venv\Scripts\python.exe -m playwright install chromium
 ```
 
-## Ejecucion rapida
+`docker/.env` está ignorado por Git. `API_WRITE_KEY` debe tener 24 caracteres o
+más. MySQL no publica el puerto 3306 al host y la API solo escucha en loopback.
 
-Desde la raiz del proyecto:
+## Ejecución
 
 ```powershell
 docker compose -f docker/docker-compose.yml up --build -d
 docker compose -f docker/docker-compose.yml ps
+Invoke-RestMethod http://127.0.0.1:8000/health/db
+Invoke-RestMethod 'http://127.0.0.1:8000/incidentes?limit=20&offset=0'
 ```
 
-Validar API:
+Registrar un evento protegido:
 
 ```powershell
-curl http://127.0.0.1:8000/
-curl http://127.0.0.1:8000/health/db
-curl http://127.0.0.1:8000/incidentes
+$config = Get-Content docker\.env | ConvertFrom-StringData
+$headers = @{ 'X-API-Key' = $config.API_WRITE_KEY }
+$body = @{ servicio='demo'; estado='abierto'; mensaje='Prueba controlada' } | ConvertTo-Json
+Invoke-RestMethod http://127.0.0.1:8000/incidentes -Method Post -Headers $headers -ContentType 'application/json' -Body $body
 ```
 
-Validar sitio vigilado:
+Monitor, continuidad y flujo orquestado:
 
 ```powershell
-curl http://127.0.0.1:8080/
-```
-
-Ejecutar monitor Playwright:
-
-```powershell
-$env:URL_MONITOREADA="http://127.0.0.1:8080/"
 .\venv\Scripts\python.exe playwright-monitor\monitor.py
-```
-
-Ejecutar remediacion SSH:
-
-```powershell
-.\venv\Scripts\python.exe remediacion\remediador.py
-```
-
-Ejecutar continuidad operacional:
-
-```powershell
 .\venv\Scripts\python.exe continuidad\gestor_continuidad.py
-```
-
-Demostrar contingencia con sitio principal caido:
-
-```powershell
-docker stop sitio-vigilado
-.\venv\Scripts\python.exe continuidad\gestor_continuidad.py
-```
-
-Abrir sitio de respaldo:
-
-```text
-http://127.0.0.1:8081/
-```
-
-
-Ejecutar flujo completo Rocketbot:
-
-```powershell
 .\rocketbot\ejecutar_flujo_completo.bat
 ```
 
-## Dashboard
-
-Levantar servidor estatico:
+Para el dashboard:
 
 ```powershell
-cd dashboard
+Push-Location dashboard
 ..\venv\Scripts\python.exe -m http.server 5500
+Pop-Location
 ```
 
-Abrir:
+Abra `http://127.0.0.1:5500/`.
 
-```text
-http://127.0.0.1:5500/
-```
-
-## Base de datos
-
-La persistencia del prototipo usa MySQL Docker.
-
-Validar registros:
+## Demostración de continuidad
 
 ```powershell
-docker exec -it observabilidad-mysql mysql -u observabilidad -pobservabilidad123 observabilidad -e "SELECT * FROM incidentes ORDER BY id DESC LIMIT 5;"
+docker compose -f docker/docker-compose.yml stop sitio-vigilado
+.\venv\Scripts\python.exe continuidad\gestor_continuidad.py
 ```
 
-## Documentacion de defensa
+El gestor primero intenta recrear `sitio-vigilado`. Para demostrar el respaldo,
+provoque además un fallo real de recuperación (por ejemplo, una imagen inválida en
+un entorno de prueba aislado); entonces se inicia exclusivamente el perfil
+`continuidad` y se valida `http://127.0.0.1:8081/`.
 
-Los comandos y checklist final estan en:
+Consultar MySQL sin publicar credenciales en la línea de comandos:
 
-- `docs/COMANDOS_DEFENSA.md`
-- `docs/CHECKLIST_FINAL_DEFENSA.md`
-- `docs/FLUJO_ROCKETBOT_DEFENSA.md`
-- `continuidad/README_CONTINUIDAD.md`
+```powershell
+docker compose -f docker/docker-compose.yml exec mysql sh -c 'mysql -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE" -e "SELECT id,servicio,estado,fecha_hora FROM incidentes ORDER BY id DESC LIMIT 5"'
+```
 
-## Nota de seguridad
+## Pruebas
 
-Las credenciales incluidas son de laboratorio y se usan solo para demostracion academica local. En un ambiente productivo deben reemplazarse por variables seguras, gestion de secretos y autenticacion.
+```powershell
+python -m unittest discover -s tests -v
+python -m compileall -q api continuidad playwright-monitor remediacion rocketbot
+docker compose -f docker/docker-compose.yml config --quiet
+```
+
+La evidencia generada se guarda bajo `evidencias/` y está excluida de Git para no
+versionar datos operacionales. Consulte `docs/INFORME_AUDITORIA_TECNICA.md` para el
+alcance verificado y las limitaciones de la ejecución actual.

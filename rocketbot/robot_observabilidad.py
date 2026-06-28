@@ -9,9 +9,23 @@ from pathlib import Path
 from urllib.error import URLError
 from urllib.request import urlopen
 
+RAIZ = Path(__file__).resolve().parents[1]
+
+
+def _cargar_entorno_local() -> None:
+    ruta = RAIZ / "docker" / ".env"
+    if not ruta.exists():
+        return
+    for linea in ruta.read_text(encoding="utf-8").splitlines():
+        if linea and not linea.lstrip().startswith("#") and "=" in linea:
+            nombre, valor = linea.split("=", 1)
+            os.environ.setdefault(nombre.strip(), valor.strip())
+
+
+_cargar_entorno_local()
 
 API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8000").rstrip("/")
-API_URL = os.getenv("API_URL", f"{API_BASE_URL}/")
+API_URL = os.getenv("API_URL", f"{API_BASE_URL}/health/db")
 API_INCIDENTES_URL = os.getenv(
     "API_INCIDENTES_URL",
     f"{API_BASE_URL}/incidentes",
@@ -28,12 +42,8 @@ def obtener_rutas() -> dict[str, Path]:
 
     return {
         "raiz": raiz,
-        "rocketbot": rocketbot_dir,
-        "dashboard": raiz / "dashboard" / "index.html",
         "dashboard_dir": raiz / "dashboard",
-        "sitio_prueba_dir": raiz / "Sitio-prueba",
         "monitor": raiz / "playwright-monitor" / "monitor.py",
-        "remediador": raiz / "remediacion" / "remediador.py",
         "continuidad": raiz / "continuidad" / "gestor_continuidad.py",
         "venv_python": raiz / "venv" / "Scripts" / "python.exe",
         "evidencias": raiz / "evidencias" / "rocketbot",
@@ -101,6 +111,9 @@ def validar_api() -> dict[str, object]:
     try:
         with urlopen(API_URL, timeout=10) as respuesta:
             cuerpo = respuesta.read().decode("utf-8")
+            datos = json.loads(cuerpo)
+            if datos.get("estado") != "ok":
+                raise ValueError("La API respondio sin readiness de MySQL")
             return finalizar_paso(
                 paso,
                 "ok",
@@ -111,13 +124,26 @@ def validar_api() -> dict[str, object]:
                     "respuesta": cuerpo,
                 },
             )
-    except URLError as error:
+    except (URLError, json.JSONDecodeError, ValueError) as error:
         return finalizar_paso(
             paso,
             "error",
             f"No fue posible conectar con la API: {error}",
             {"url": API_URL},
         )
+
+
+def esperar_api(intentos: int = 10, intervalo: float = 2.0) -> dict[str, object]:
+    """Espera readiness sin depender de una pausa fija."""
+    resultado: dict[str, object] = {}
+    for intento in range(1, intentos + 1):
+        resultado = validar_api()
+        resultado["intento"] = intento
+        if resultado["estado"] == "ok":
+            return resultado
+        if intento < intentos:
+            time.sleep(intervalo)
+    return resultado
 
 
 def validar_url(nombre: str, url: str, timeout: int = 10) -> dict[str, object]:
@@ -178,7 +204,7 @@ def ejecutar_comando(
                 "stderr": proceso.stderr.strip(),
             },
         )
-    except subprocess.TimeoutExpired as error:
+    except (OSError, subprocess.TimeoutExpired) as error:
         return finalizar_paso(
             paso,
             "error",
@@ -234,6 +260,8 @@ def iniciar_servidor_http(
         validacion = validar_url(f"Validar {nombre} levantado", url, timeout=5)
         estado = "ok" if validacion["estado"] == "ok" else "error"
         detalle = f"{nombre} iniciado" if estado == "ok" else f"{nombre} no respondio despues de iniciar"
+        if estado == "error":
+            proceso.terminate()
 
         return finalizar_paso(
             paso,
@@ -247,7 +275,7 @@ def iniciar_servidor_http(
                 "validacion": validacion,
             },
         )
-    except Exception as error:
+    except OSError as error:
         return finalizar_paso(
             paso,
             "error",
@@ -261,14 +289,20 @@ def abrir_url(nombre: str, url: str) -> dict[str, object]:
     paso = crear_paso(nombre)
 
     try:
-        webbrowser.open(url)
+        if not webbrowser.open(url):
+            return finalizar_paso(
+                paso,
+                "error",
+                "El sistema no confirmo la apertura del navegador",
+                {"url": url},
+            )
         return finalizar_paso(
             paso,
             "ok",
             "URL abierta en navegador",
             {"url": url},
         )
-    except Exception as error:
+    except (OSError, webbrowser.Error) as error:
         return finalizar_paso(
             paso,
             "error",
@@ -392,8 +426,7 @@ def ejecutar_flujo() -> int:
     print(f"Python utilizado: {python_cmd}")
 
     pasos.append(levantar_docker_compose(rutas))
-    time.sleep(5)
-    pasos.append(validar_api())
+    pasos.append(esperar_api())
     pasos.append(validar_url("Validar sitio vigilado Docker puerto 8080", SITIO_OBSERVADO_URL))
     pasos.append(
         iniciar_servidor_http(
@@ -427,24 +460,6 @@ def ejecutar_flujo() -> int:
 
     pasos.append(
         ejecutar_script(
-            "Ejecutar remediador Paramiko",
-            rutas["remediador"],
-            rutas["remediador"].parent,
-            python_cmd,
-            rutas["raiz"],
-            env_extra={
-                "API_BASE_URL": API_BASE_URL,
-                "SSH_HOST": "127.0.0.1",
-                "SSH_PORT": "2222",
-                "SSH_USER": "rocketbot",
-                "SSH_PASSWORD": "rocketbot123",
-                "SSH_COMMAND": 'echo "Remediacion SSH ejecutada correctamente"',
-            },
-        )
-    )
-
-    pasos.append(
-        ejecutar_script(
             "Ejecutar gestor de continuidad operacional",
             rutas["continuidad"],
             rutas["continuidad"].parent,
@@ -455,11 +470,6 @@ def ejecutar_flujo() -> int:
                 "API_BASE_URL": API_BASE_URL,
                 "URL_PRINCIPAL": SITIO_OBSERVADO_URL,
                 "URL_RESPALDO": SITIO_RESPALDO_URL,
-                "SSH_HOST": "127.0.0.1",
-                "SSH_PORT": "2222",
-                "SSH_USER": "rocketbot",
-                "SSH_PASSWORD": "rocketbot123",
-                "SSH_COMMAND": 'echo "Remediacion SSH ejecutada correctamente"',
             },
         )
     )
@@ -476,12 +486,7 @@ def ejecutar_flujo() -> int:
         "api_incidentes": API_INCIDENTES_URL,
         "sitio_observado": SITIO_OBSERVADO_URL,
         "sitio_respaldo": SITIO_RESPALDO_URL,
-        "remediacion_ssh": {
-            "host": "127.0.0.1",
-            "port": 2222,
-            "user": "rocketbot",
-            "modo": "SSH real en contenedor Docker ssh-remediacion",
-        },
+        "remediacion": {"modo": "Docker Compose", "servicio": "sitio-vigilado"},
         "pasos": pasos,
     }
 

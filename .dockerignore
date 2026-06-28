@@ -3,3 +3,15 @@ __pycache__/
 */__pycache__/
 evidencias/
 *.pyc
+.git/
+.env
+docker/.env
+docs/
+dashboard/
+evidencias/
+Sitio-prueba/
+Sitio-respaldo/
+rocketbot/
+continuidad/
+remediacion/
+playwright-monitor/

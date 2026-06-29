@@ -26,6 +26,9 @@ evidencias/**/*.png
 evidencias/**/*.jpg
 evidencias/**/*.jpeg
 evidencias/**/*.log
+evidencias/**/*.html
+evidencias/**/*.sha256
+evidencias/**/*.tmp
 !evidencias/.gitkeep
 !evidencias/rocketbot/.gitkeep
 !evidencias/continuidad/.gitkeep

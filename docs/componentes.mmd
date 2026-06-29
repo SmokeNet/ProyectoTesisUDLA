@@ -1,10 +1,11 @@
 flowchart LR
-    Dashboard["Dashboard Web"] -->|GET paginado| API["FastAPI"]
-    Monitor["Monitor Playwright"] -->|GET y contenido| Sitio["Sitio principal"]
-    Monitor -->|POST autenticado| API
-    API -->|SQLAlchemy| MySQL[("MySQL / red interna")]
-    Rocketbot["Rocketbot / adaptador"] --> Continuidad["Gestor de continuidad"]
-    Continuidad --> Remediador["Remediador Compose / lista blanca"]
-    Remediador --> Sitio
-    Continuidad --> Respaldo["Sitio respaldo / perfil continuidad"]
-    Continuidad --> API
+    R["Rocketbot"] --> O["Orquestador"]
+    O --> P["Sondas Playwright / sistema"]
+    O --> E["Motor de reglas"]
+    O --> M["Motor de remediación"]
+    O --> V["Evidencias SHA-256"]
+    O --> A["FastAPI v2"]
+    A --> D[("MySQL")]
+    Q["Dashboard"] --> A
+    M --> S["Servicios Compose"]
+    M --> B["Respaldo"]

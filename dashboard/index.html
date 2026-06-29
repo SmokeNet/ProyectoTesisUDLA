@@ -1,278 +1,52 @@
 <!doctype html>
 <html lang="es">
-  <head>
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Dashboard de Observabilidad</title>
-    <link
-      href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"
-      integrity="sha384-QWTKZyjpPEjISv5WaRU9OFeRpok6YctnYmDr5pNlyT2bRjXh0JMhjY6hW+ALEwIH"
-      crossorigin="anonymous"
-      rel="stylesheet"
-    >
-    <style>
-      body {
-        background: #f4f6f8;
-        color: #1f2933;
-      }
-
-      .page-shell {
-        max-width: 1180px;
-      }
-
-      .summary-panel {
-        background: #ffffff;
-        border: 1px solid #d9e2ec;
-        border-radius: 8px;
-      }
-
-      .status-pill {
-        border-radius: 999px;
-        display: inline-flex;
-        font-size: 0.82rem;
-        font-weight: 600;
-        line-height: 1;
-        padding: 0.35rem 0.65rem;
-        text-transform: uppercase;
-      }
-
-      .status-error,
-      .status-abierto {
-        background: #fde2e2;
-        color: #9b1c1c;
-      }
-
-      .status-resuelto,
-      .status-ok {
-        background: #dcfce7;
-        color: #166534;
-      }
-
-      .status-contingencia {
-        background: #fef3c7;
-        color: #92400e;
-      }
-
-      .status-critico {
-        background: #fee2e2;
-        color: #7f1d1d;
-      }
-
-      .status-default {
-        background: #e0e8f9;
-        color: #1e3a8a;
-      }
-
-      .table-wrap {
-        background: #ffffff;
-        border: 1px solid #d9e2ec;
-        border-radius: 8px;
-        overflow: hidden;
-      }
-
-      .mensaje-cell {
-        min-width: 320px;
-        white-space: normal;
-      }
-
-      .api-source {
-        font-size: 0.88rem;
-      }
-    </style>
-  </head>
-  <body>
-    <main class="container-fluid page-shell py-4">
-      <header class="mb-4">
-        <h1 class="h3 mb-1">Sistema de Observabilidad Sintetica</h1>
-        <p class="text-secondary mb-0">Dashboard minimo de incidentes registrados</p>
-      </header>
-
-      <section class="summary-panel p-3 mb-4">
-        <div class="row g-3 align-items-center">
-          <div class="col-12 col-md">
-            <span class="text-secondary d-block">Total de incidentes</span>
-            <strong class="display-6" id="totalIncidentes">0</strong>
-            <span class="api-source text-secondary d-block" id="origenApi"></span>
-          </div>
-          <div class="col-12 col-md-auto">
-            <button class="btn btn-primary" id="btnActualizar" type="button">
-              Actualizar
-            </button>
-          </div>
-        </div>
-      </section>
-
-      <div class="alert alert-info" id="estadoCarga" role="status">
-        Cargando incidentes...
-      </div>
-
-      <section class="table-wrap">
-        <div class="table-responsive">
-          <table class="table table-hover align-middle mb-0">
-            <thead class="table-light">
-              <tr>
-                <th scope="col">ID</th>
-                <th scope="col">Servicio</th>
-                <th scope="col">Estado</th>
-                <th scope="col">Mensaje</th>
-                <th scope="col">Fecha/Hora</th>
-              </tr>
-            </thead>
-            <tbody id="tablaIncidentes">
-              <tr>
-                <td colspan="5" class="text-center text-secondary py-4">
-                  Sin datos para mostrar.
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
-    </main>
-
-    <script>
-      const API_INCIDENTES_URL = "http://127.0.0.1:8000/incidentes?limit=20&offset=0";
-      const totalIncidentes = document.getElementById("totalIncidentes");
-      const estadoCarga = document.getElementById("estadoCarga");
-      const tablaIncidentes = document.getElementById("tablaIncidentes");
-      const btnActualizar = document.getElementById("btnActualizar");
-      const origenApi = document.getElementById("origenApi");
-
-      origenApi.textContent = `Origen API: ${API_INCIDENTES_URL}`;
-
-      function escaparHtml(valor) {
-        return String(valor ?? "")
-          .replaceAll("&", "&amp;")
-          .replaceAll("<", "&lt;")
-          .replaceAll(">", "&gt;")
-          .replaceAll('"', "&quot;")
-          .replaceAll("'", "&#039;");
-      }
-
-      function claseEstado(estado) {
-        const estadoNormalizado = String(estado ?? "").toLowerCase();
-
-        if (["error", "abierto"].includes(estadoNormalizado)) {
-          return "status-error";
-        }
-
-        if (["resuelto", "ok"].includes(estadoNormalizado)) {
-          return "status-resuelto";
-        }
-
-        if (["contingencia_activa", "pendiente"].includes(estadoNormalizado)) {
-          return "status-contingencia";
-        }
-
-        if (["error_critico"].includes(estadoNormalizado)) {
-          return "status-critico";
-        }
-
-        return "status-default";
-      }
-
-      function normalizarFechaUtc(fechaHora) {
-        const valor = String(fechaHora).trim();
-        const tieneZonaHoraria = /z$|[+-]\d{2}:\d{2}$/i.test(valor);
-
-        return tieneZonaHoraria ? valor : `${valor}Z`;
-      }
-
-      function formatearFecha(fechaHora) {
-        if (!fechaHora) {
-          return "-";
-        }
-
-        const fecha = new Date(normalizarFechaUtc(fechaHora));
-
-        if (Number.isNaN(fecha.getTime())) {
-          return fechaHora;
-        }
-
-        return fecha.toLocaleString("es-CL", {
-          timeZone: "America/Santiago",
-          dateStyle: "short",
-          timeStyle: "medium",
-        });
-      }
-
-      function renderizarIncidentes(incidentes, total) {
-        totalIncidentes.textContent = total;
-
-        if (incidentes.length === 0) {
-          tablaIncidentes.innerHTML = `
-            <tr>
-              <td colspan="5" class="text-center text-secondary py-4">
-                No hay incidentes registrados.
-              </td>
-            </tr>
-          `;
-          return;
-        }
-
-        tablaIncidentes.innerHTML = incidentes.map((incidente) => `
-          <tr>
-            <td>${escaparHtml(incidente.id)}</td>
-            <td>${escaparHtml(incidente.servicio)}</td>
-            <td>
-              <span class="status-pill ${claseEstado(incidente.estado)}">
-                ${escaparHtml(incidente.estado)}
-              </span>
-            </td>
-            <td class="mensaje-cell">${escaparHtml(incidente.mensaje)}</td>
-            <td>${escaparHtml(formatearFecha(incidente.fecha_hora))}</td>
-          </tr>
-        `).join("");
-      }
-
-      async function cargarIncidentes() {
-        const controlador = new AbortController();
-        const timeout = setTimeout(() => controlador.abort(), 8000);
-        btnActualizar.disabled = true;
-        estadoCarga.setAttribute("aria-busy", "true");
-        estadoCarga.className = "alert alert-info";
-        estadoCarga.textContent = "Cargando incidentes...";
-
-        try {
-          const respuesta = await fetch(API_INCIDENTES_URL, {
-            headers: { Accept: "application/json" },
-            signal: controlador.signal,
-          });
-
-          if (!respuesta.ok) {
-            throw new Error(`La API respondio con codigo HTTP ${respuesta.status}`);
-          }
-
-          const datos = await respuesta.json();
-          if (!Array.isArray(datos.incidentes) || !Number.isInteger(datos.total)) {
-            throw new Error("La API entrego una estructura inesperada");
-          }
-
-          renderizarIncidentes(datos.incidentes, datos.total);
-          estadoCarga.className = "alert alert-success";
-          estadoCarga.textContent = "Ultimos incidentes cargados correctamente.";
-        } catch (error) {
-          console.error("Error al consultar incidentes desde la API", error);
-          totalIncidentes.textContent = "0";
-          tablaIncidentes.innerHTML = `
-            <tr>
-              <td colspan="5" class="text-center text-secondary py-4">
-                No fue posible cargar los incidentes.
-              </td>
-            </tr>
-          `;
-          estadoCarga.className = "alert alert-danger";
-          const detalle = error.name === "AbortError" ? "tiempo de espera agotado" : error.message;
-          estadoCarga.textContent = `Error al consultar la API: ${detalle}`;
-        } finally {
-          clearTimeout(timeout);
-          btnActualizar.disabled = false;
-          estadoCarga.removeAttribute("aria-busy");
-        }
-      }
-
-      btnActualizar.addEventListener("click", cargarIncidentes);
-      cargarIncidentes();
-    </script>
-  </body>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Centro de Operaciones | Observabilidad</title>
+  <style>
+    :root{color-scheme:dark;--bg:#07111f;--panel:#101d2f;--line:#26364b;--text:#e7eef8;--muted:#93a4ba;--ok:#34d399;--warn:#fbbf24;--bad:#fb7185;--accent:#60a5fa}
+    *{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at top right,#11284a 0,var(--bg) 42%);color:var(--text);font:14px/1.5 system-ui,sans-serif}
+    main{max-width:1400px;margin:auto;padding:28px}.top{display:flex;justify-content:space-between;gap:20px;align-items:center;margin-bottom:24px}h1{font-size:clamp(1.5rem,3vw,2.3rem);margin:0}.subtitle,.muted{color:var(--muted)}button{border:1px solid #3b82f6;background:#2563eb;color:white;padding:10px 16px;border-radius:8px;cursor:pointer}.grid{display:grid;gap:14px}.kpis{grid-template-columns:repeat(auto-fit,minmax(170px,1fr));margin-bottom:20px}.card,.panel{background:color-mix(in srgb,var(--panel) 92%,transparent);border:1px solid var(--line);border-radius:12px;padding:16px;box-shadow:0 12px 35px #0003}.kpi-value{font-size:1.7rem;font-weight:750;margin-top:4px}.layout{grid-template-columns:minmax(0,2fr) minmax(280px,1fr)}.panel{overflow:hidden}.panel h2{margin:0 0 14px;font-size:1.05rem}.services{grid-template-columns:repeat(auto-fit,minmax(145px,1fr))}.service{border:1px solid var(--line);border-radius:9px;padding:12px}.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:7px}.ok{color:var(--ok)}.warn{color:var(--warn)}.bad{color:var(--bad)}.dot.ok{background:var(--ok)}.dot.warn{background:var(--warn)}.dot.bad{background:var(--bad)}table{width:100%;border-collapse:collapse}th,td{text-align:left;padding:10px;border-bottom:1px solid var(--line);vertical-align:top}th{color:var(--muted);font-size:.75rem;text-transform:uppercase}.table-wrap{overflow:auto}.badge{display:inline-block;border:1px solid currentColor;border-radius:99px;padding:2px 8px;font-size:.75rem}.trend{display:flex;align-items:end;gap:8px;height:170px;border-bottom:1px solid var(--line);padding-top:12px}.bar{flex:1;min-width:24px;background:linear-gradient(var(--accent),#2563eb);border-radius:5px 5px 0 0;position:relative}.bar span{position:absolute;bottom:100%;left:50%;transform:translateX(-50%);font-size:.7rem}.bar small{position:absolute;top:100%;left:50%;transform:translateX(-50%);color:var(--muted);white-space:nowrap}.statusline{margin:16px 0;padding:10px 12px;border:1px solid var(--line);border-radius:8px}@media(max-width:900px){.layout{grid-template-columns:1fr}.top{align-items:flex-start;flex-direction:column}th:nth-child(4),td:nth-child(4){display:none}}
+  </style>
+</head>
+<body>
+<main>
+  <header class="top">
+    <div><h1>Centro de Operaciones</h1><div class="subtitle">Observabilidad sintética · respuesta automática · continuidad</div></div>
+    <button id="refresh" type="button">Actualizar ahora</button>
+  </header>
+  <div id="status" class="statusline" role="status">Consultando plataforma…</div>
+  <section class="grid kpis" aria-label="Indicadores principales">
+    <div class="card"><div class="muted">Estado general</div><div class="kpi-value" id="overall">—</div></div>
+    <div class="card"><div class="muted">Disponibilidad 24 h</div><div class="kpi-value" id="availability">—</div></div>
+    <div class="card"><div class="muted">Incidentes activos</div><div class="kpi-value" id="active">—</div></div>
+    <div class="card"><div class="muted">MTTD</div><div class="kpi-value" id="mttd">—</div></div>
+    <div class="card"><div class="muted">MTTR</div><div class="kpi-value" id="mttr">—</div></div>
+    <div class="card"><div class="muted">Éxito remediación</div><div class="kpi-value" id="success">—</div></div>
+  </section>
+  <section class="grid layout">
+    <div class="grid">
+      <article class="panel"><h2>Servicios y componentes</h2><div id="services" class="grid services"></div></article>
+      <article class="panel"><h2>Bitácora operacional</h2><div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Servicio</th><th>Incidente</th><th>Diagnóstico</th><th>Severidad</th><th>Estado</th></tr></thead><tbody id="events"></tbody></table></div></article>
+    </div>
+    <aside class="grid">
+      <article class="panel"><h2>Tendencia de incidentes</h2><div id="trend" class="trend"></div></article>
+      <article class="panel"><h2>Actividad de respuesta</h2><p><span class="muted">Remediaciones:</span> <strong id="remediations">—</strong></p><p><span class="muted">Incidentes 24 h:</span> <strong id="total">—</strong></p><p><span class="muted">Última actualización:</span> <strong id="updated">—</strong></p></article>
+    </aside>
+  </section>
+</main>
+<script>
+  const API="http://127.0.0.1:8000";
+  const $=id=>document.getElementById(id);
+  const fmtMs=value=>value==null?"Sin datos":value<1000?`${Math.round(value)} ms`:`${(value/1000).toFixed(2)} s`;
+  const tone=status=>["saludable","resuelto","ok"].includes(status)?"ok":["degradado","escalado","abierto"].includes(status)?"warn":"bad";
+  async function get(path,signal){const response=await fetch(`${API}${path}`,{headers:{Accept:"application/json"},signal});if(!response.ok)throw new Error(`HTTP ${response.status} en ${path}`);return response.json()}
+  function renderServices(items){const root=$("services");root.replaceChildren();for(const item of items){const card=document.createElement("div");card.className="service";const title=document.createElement("strong");const dot=document.createElement("span");dot.className=`dot ${tone(item.estado_actual)}`;title.append(dot,document.createTextNode(item.nombre));const state=document.createElement("div");state.className=tone(item.estado_actual);state.textContent=item.estado_actual;const time=document.createElement("small");time.className="muted";time.textContent=item.ultimo_heartbeat?new Date(item.ultimo_heartbeat).toLocaleString("es-CL"):"Sin heartbeat";card.append(title,state,time);root.append(card)}}
+  function renderEvents(items){const body=$("events");body.replaceChildren();for(const item of items){const row=document.createElement("tr");const values=[new Date(item.detectado_en).toLocaleString("es-CL"),item.servicio,item.tipo_incidente,item.diagnostico,item.severidad,item.estado_final];values.forEach((value,index)=>{const cell=document.createElement("td");if(index>3){const badge=document.createElement("span");badge.className=`badge ${tone(value)}`;badge.textContent=value;cell.append(badge)}else{cell.textContent=value}row.append(cell)});body.append(row)}if(!items.length){const row=body.insertRow();const cell=row.insertCell();cell.colSpan=6;cell.className="muted";cell.textContent="Aún no existen eventos operacionales."}}
+  function renderTrend(items){const root=$("trend");root.replaceChildren();const max=Math.max(1,...items.map(i=>i.incidents));for(const item of items){const bar=document.createElement("div");bar.className="bar";bar.style.height=`${Math.max(4,item.incidents/max*100)}%`;const count=document.createElement("span");count.textContent=item.incidents;const date=document.createElement("small");date.textContent=item.date.slice(5);bar.append(count,date);root.append(bar)}if(!items.length){root.textContent="Sin datos suficientes";root.className="trend muted"}}
+  async function load(){const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),8000);$("refresh").disabled=true;try{const [health,summary,services,events]=await Promise.all([get("/api/v1/health",controller.signal),get("/api/v1/metrics/summary?hours=24",controller.signal),get("/api/v1/services",controller.signal),get("/api/v1/events?limit=30",controller.signal)]);$("overall").textContent=health.estado;$("overall").className=`kpi-value ${tone(health.estado)}`;$("availability").textContent=`${summary.availability_percent.toFixed(2)}%`;$("active").textContent=summary.active_incidents;$("mttd").textContent=fmtMs(summary.mttd_ms);$("mttr").textContent=fmtMs(summary.mttr_ms);$("success").textContent=`${summary.remediation_success_rate.toFixed(1)}%`;$("remediations").textContent=summary.remediation_count;$("total").textContent=summary.total_incidents;$("updated").textContent=new Date(summary.generated_at).toLocaleString("es-CL");renderServices(services);renderEvents(events.events);renderTrend(summary.trend);$("status").className="statusline ok";$("status").textContent="Plataforma consultada correctamente."}catch(error){$("status").className="statusline bad";$("status").textContent=`No fue posible actualizar: ${error.name==="AbortError"?"timeout":error.message}`}finally{clearTimeout(timer);$("refresh").disabled=false}}
+  $("refresh").addEventListener("click",load);load();setInterval(load,30000);
+</script>
+</body>
 </html>

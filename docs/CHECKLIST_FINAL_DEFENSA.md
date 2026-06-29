@@ -1,16 +1,13 @@
-# Checklist de defensa
+# Checklist de defensa Fase 1
 
-- [ ] Docker Desktop activo y `docker compose ... ps` con servicios `healthy`.
-- [ ] `GET /health/db` retorna HTTP 200; mostrar también un 503 controlado.
-- [ ] POST sin clave retorna 401 y POST válido retorna 201.
-- [ ] MySQL persiste tras recrear la API.
-- [ ] Playwright demuestra éxito, fallo de contenido y captura PNG.
-- [ ] Dashboard muestra total, últimos eventos y error de conexión comprensible.
-- [ ] Caída del principal ejecuta recuperación real y segunda validación.
-- [ ] Fallo de recuperación activa exclusivamente el perfil de respaldo.
-- [ ] Evidencias JSON no contienen secretos y tienen inicio, fin, pasos y códigos.
-- [ ] Correo se presenta como real solo con evidencia de entrega; si no, como simulado.
-- [ ] Rocketbot Studio muestra la acción que invoca el `.bat`; el adaptador solo no
-  demuestra la interfaz RPA propietaria.
-- [ ] Ejecutar `python -m unittest discover -s tests -v` frente a la comisión.
-- [ ] No editar credenciales, borrar volúmenes ni improvisar cambios durante la demo.
+- [ ] Los cuatro servicios base están `healthy`.
+- [ ] API v2 y MySQL responden; dashboard muestra los mismos datos.
+- [ ] Heartbeat crea servicios y métricas de disponibilidad.
+- [ ] Se demuestra una falla, su regla, evento, evidencia y hash.
+- [ ] La acción usa lista blanca, se revalida y actualiza MTTR.
+- [ ] Un segundo intento queda bloqueado por límite o cooldown.
+- [ ] Una acción riesgosa escala sin mutar el host.
+- [ ] El respaldo no estaba activo antes de la contingencia.
+- [ ] Rocketbot Studio muestra la invocación y el código final.
+- [ ] Las 13 pruebas pasan frente a la comisión.
+- [ ] Las limitaciones de `FASE1_IMPLEMENTACION.md` se explican sin ocultarlas.

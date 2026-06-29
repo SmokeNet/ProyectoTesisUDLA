@@ -1,15 +1,12 @@
 # Continuidad operacional
 
-El gestor valida el principal, registra la falla, recrea el servicio mediante Docker
-Compose y vuelve a validarlo. Solo si continúa caído inicia el perfil `continuidad`,
-comprueba el respaldo, notifica por SMTP (si está configurado) y genera JSON.
+El adaptador ejecuta el motor de observabilidad y remediación. Si una caída recuperable
+persiste, activa `sitio-respaldo` mediante el perfil Compose `continuidad`, lo valida,
+registra un segundo intento y genera alerta SMTP o evidencia de alerta simulada.
 
 ```powershell
-.\venv\Scripts\python.exe continuidad\gestor_continuidad.py
+.\rocketbot\ejecutar_continuidad.bat
 ```
 
-Variables opcionales: `INTENTOS_VALIDACION`, `SEGUNDOS_ENTRE_INTENTOS`,
-`TIMEOUT_HTTP`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`,
-`SMTP_FROM` y `SMTP_TO`. La clave de escritura se carga desde `docker/.env` para la
-ejecución local. Sin SMTP se registra una notificación simulada, claramente marcada;
-eso no constituye evidencia de entrega de correo.
+DNS, SSL, disco y otros incidentes especializados no activan automáticamente el
+respaldo: se escalan porque requieren un runbook distinto.

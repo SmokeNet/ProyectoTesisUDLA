@@ -1,122 +1,96 @@
-# Observabilidad sintética y continuidad operacional
+# Ecosistema profesional de observabilidad y auto-remediación
 
-Prototipo académico que supervisa un sitio web, registra eventos en FastAPI/MySQL,
-los presenta en un dashboard y ejecuta una recuperación controlada con Docker
-Compose. Si la recuperación no resulta, activa un sitio de respaldo y deja evidencia
-JSON. `rocketbot/robot_observabilidad.py` es el adaptador invocado desde Rocketbot
-Studio o desde los lanzadores de Windows.
+Plataforma académica orientada a PyME que ejecuta observabilidad sintética,
+clasifica fallas mediante reglas configurables, persiste telemetría y bitácora en
+MySQL, genera evidencia verificable y aplica estrategias seguras con revalidación.
 
-## Flujo real
+## Capacidades
+
+- Health, heartbeat, disponibilidad, latencia, MTTD, MTTR y tendencias.
+- 23 reglas para HTTP, timeout, DNS, SSL, puertos, contenido, recursos, Docker,
+  API, MySQL, conexiones, login y SSH.
+- Eventos operacionales con causa, diagnóstico, acción, resultado, tiempos,
+  responsable, estado final y referencia de evidencia.
+- Evidencia JSON, HTML, logs y capturas con SHA-256.
+- Remediación con lista blanca, máximo de intentos, cooldown y verificación posterior.
+- Contingencia mediante sitio de respaldo cuando la recuperación aplicable falla.
+- Dashboard operativo y adaptador trazable para Rocketbot Studio.
+
+## Arquitectura
 
 ```text
-Playwright -> sitio principal :8080
-       | falla
-       v
-FastAPI :8000 -> MySQL (solo red Docker) -> dashboard :5500
-       |
-       v
-gestor de continuidad -> recrear sitio principal -> volver a comprobar
-       | sigue caído
-       v
-activar perfil continuidad / sitio de respaldo :8081 / notificar / evidenciar
+Rocketbot / Programador de tareas
+             |
+             v
+ObservationOrchestrator
+  | sondas -> RuleEngine -> OperationalEvent -> EvidenceStore
+  |                         |                   JSON/HTML/PNG/SHA-256
+  |                         v
+  |                    FastAPI v2 -> MySQL
+  |                         |
+  +-> RemediationEngine ----+-> revalidación -> continuidad/escalamiento
+                                  |
+                                  v
+                           Dashboard operativo
 ```
 
-La remediación acepta únicamente el servicio `sitio-vigilado`; no ejecuta texto
-arbitrario ni monta el socket Docker dentro de un contenedor. La versión anterior
-abría una sesión SSH que solo hacía `echo`: eso comprobaba conectividad, pero no
-recuperaba el servicio, por lo que fue retirado como afirmación funcional.
-
-## Componentes
-
-| Ruta | Responsabilidad |
-| --- | --- |
-| `api/` | API, validación, persistencia y readiness |
-| `playwright-monitor/` | prueba de HTTP, contenido, latencia y captura de error |
-| `remediacion/` | recuperación con lista blanca mediante Compose |
-| `continuidad/` | decisión, reintentos, respaldo, correo y evidencia |
-| `rocketbot/` | adaptador/orquestador para Rocketbot Studio y Windows |
-| `dashboard/` | vista paginada y protegida contra inyección HTML |
-| `docker/` | servicios, redes, healthchecks y configuración local |
-| `tests/` | pruebas unitarias sin infraestructura externa |
-| `docs/` | arquitectura, pruebas, defensa e informe de auditoría |
+El núcleo está en `observability/`. `playwright-monitor/`, `continuidad/`,
+`remediacion/` y `rocketbot/` son adaptadores; no duplican reglas de negocio.
 
 ## Preparación
 
-Requisitos: Docker Desktop, Python 3.14 y PowerShell.
-
 ```powershell
 Copy-Item docker\.env.example docker\.env
-# Edite docker\.env y reemplace todos los valores "cambiar_...".
+# Reemplace todos los valores cambiar_... de docker/.env
 python -m venv venv
 .\venv\Scripts\python.exe -m pip install -r requirements.txt
 .\venv\Scripts\python.exe -m playwright install chromium
 ```
-
-`docker/.env` está ignorado por Git. `API_WRITE_KEY` debe tener 24 caracteres o
-más. MySQL no publica el puerto 3306 al host y la API solo escucha en loopback.
 
 ## Ejecución
 
 ```powershell
 docker compose -f docker/docker-compose.yml up --build -d
 docker compose -f docker/docker-compose.yml ps
-Invoke-RestMethod http://127.0.0.1:8000/health/db
-Invoke-RestMethod 'http://127.0.0.1:8000/incidentes?limit=20&offset=0'
+.\rocketbot\ejecutar_monitor.bat
 ```
 
-Registrar un evento protegido:
+Servicios locales:
+
+- Dashboard: `http://127.0.0.1:5500/`
+- API/OpenAPI: `http://127.0.0.1:8000/docs`
+- Sitio vigilado: `http://127.0.0.1:8080/`
+- Respaldo bajo contingencia: `http://127.0.0.1:8081/`
+
+Flujo Rocketbot/continuidad:
 
 ```powershell
-$config = Get-Content docker\.env | ConvertFrom-StringData
-$headers = @{ 'X-API-Key' = $config.API_WRITE_KEY }
-$body = @{ servicio='demo'; estado='abierto'; mensaje='Prueba controlada' } | ConvertTo-Json
-Invoke-RestMethod http://127.0.0.1:8000/incidentes -Method Post -Headers $headers -ContentType 'application/json' -Body $body
-```
-
-Monitor, continuidad y flujo orquestado:
-
-```powershell
-.\venv\Scripts\python.exe playwright-monitor\monitor.py
-.\venv\Scripts\python.exe continuidad\gestor_continuidad.py
 .\rocketbot\ejecutar_flujo_completo.bat
+.\rocketbot\ejecutar_continuidad.bat
 ```
 
-Para el dashboard:
+## Configuración de reglas
 
-```powershell
-Push-Location dashboard
-..\venv\Scripts\python.exe -m http.server 5500
-Pop-Location
-```
+`config/detection_rules.json` contiene umbrales y activación. Login, recursos
+críticos y SSH vienen deshabilitados hasta aportar objetivos/credenciales de prueba
+seguros. SSH solo valida el banner del puerto configurado; nunca ejecuta comandos.
 
-Abra `http://127.0.0.1:5500/`.
+## Seguridad operacional
 
-## Demostración de continuidad
-
-```powershell
-docker compose -f docker/docker-compose.yml stop sitio-vigilado
-.\venv\Scripts\python.exe continuidad\gestor_continuidad.py
-```
-
-El gestor primero intenta recrear `sitio-vigilado`. Para demostrar el respaldo,
-provoque además un fallo real de recuperación (por ejemplo, una imagen inválida en
-un entorno de prueba aislado); entonces se inicia exclusivamente el perfil
-`continuidad` y se valida `http://127.0.0.1:8081/`.
-
-Consultar MySQL sin publicar credenciales en la línea de comandos:
-
-```powershell
-docker compose -f docker/docker-compose.yml exec mysql sh -c 'mysql -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE" -e "SELECT id,servicio,estado,fecha_hora FROM incidentes ORDER BY id DESC LIMIT 5"'
-```
+- No hay credenciales versionadas; `docker/.env` está ignorado.
+- Escrituras API requieren `X-API-Key`.
+- Los comandos se construyen desde estrategias y servicios permitidos; no usan shell.
+- DNS, SSL, disco, conexiones, SSH y despliegue se escalan: no se aplican cambios
+  destructivos o difíciles de revertir.
+- MySQL no publica puerto al host y la API solo escucha en loopback.
 
 ## Pruebas
 
 ```powershell
 python -m unittest discover -s tests -v
-python -m compileall -q api continuidad playwright-monitor remediacion rocketbot
+python -m compileall -q api observability playwright-monitor remediacion continuidad rocketbot tests
 docker compose -f docker/docker-compose.yml config --quiet
 ```
 
-La evidencia generada se guarda bajo `evidencias/` y está excluida de Git para no
-versionar datos operacionales. Consulte `docs/INFORME_AUDITORIA_TECNICA.md` para el
-alcance verificado y las limitaciones de la ejecución actual.
+Consulte [FASE1_IMPLEMENTACION.md](docs/FASE1_IMPLEMENTACION.md) para cobertura,
+justificación, riesgos, validación y limitaciones reales.

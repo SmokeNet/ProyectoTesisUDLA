@@ -1,8 +1,36 @@
 erDiagram
-    INCIDENTES {
+    SERVICIOS ||--o{ METRICAS : produce
+    EVENTOS_OPERACIONALES ||--o{ EVIDENCIAS : contiene
+    EVENTOS_OPERACIONALES ||--o{ INTENTOS_REMEDIACION : registra
+    SERVICIOS {
+        string nombre PK
+        string estado_actual
+        datetime ultimo_heartbeat
+    }
+    EVENTOS_OPERACIONALES {
+        string id PK
+        string servicio
+        string tipo_incidente
+        string severidad
+        string estado_final
+        float tiempo_recuperacion_ms
+    }
+    METRICAS {
         int id PK
         string servicio
-        string estado
-        string mensaje
-        datetime fecha_hora
+        string nombre
+        float valor
+        datetime registrada_en
+    }
+    EVIDENCIAS {
+        int id PK
+        string evento_id FK
+        string sha256
+        string ruta
+    }
+    INTENTOS_REMEDIACION {
+        int id PK
+        string evento_id FK
+        string estrategia
+        boolean exitosa
     }

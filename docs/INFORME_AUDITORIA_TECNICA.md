@@ -1,5 +1,8 @@
 # Informe de auditoría técnica integral
 
+> Documento histórico de la auditoría anterior. La arquitectura vigente y la
+> validación de Fase 1 se encuentran en `FASE1_IMPLEMENTACION.md`.
+
 **Fecha:** 2026-06-28
 **Alcance:** 46 archivos funcionales, de configuración y documentales; se excluyó
 únicamente la metadata interna de Git.

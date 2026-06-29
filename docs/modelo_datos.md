@@ -1,20 +1,15 @@
-# Modelo de datos
+# Modelo de datos operacional
 
-La tabla `incidentes` representa eventos inmutables de los componentes.
+| Tabla | Responsabilidad |
+| --- | --- |
+| `servicios` | inventario, estado y último heartbeat |
+| `eventos_operacionales` | bitácora completa de detección a cierre |
+| `metricas` | series de disponibilidad, latencia y recursos |
+| `evidencias` | ruta, tipo, MIME y SHA-256 asociados al evento |
+| `intentos_remediacion` | estrategia, intento, estado antes/después y resultado |
+| `incidentes` | contrato heredado compatible con la primera versión |
 
-| Campo | Tipo | Regla |
-| --- | --- | --- |
-| `id` | INTEGER | clave primaria |
-| `servicio` | VARCHAR(100) | requerido; índice compuesto con estado |
-| `estado` | VARCHAR(50) | requerido; conjunto cerrado |
-| `mensaje` | VARCHAR(1000) | requerido |
-| `fecha_hora` | DATETIME UTC | requerido; índice compuesto con id |
-
-Estados: `abierto`, `error`, `ok`, `resuelto`, `pendiente`,
-`contingencia_activa` y `error_critico`. Pydantic valida antes de persistir y el
-modelo declara además un `CHECK`. MySQL se alcanza solo desde la red `datos`; para
-administración se usa `docker compose exec mysql`, no un puerto publicado.
-
-El prototipo tiene una sola entidad y no necesita claves foráneas. Para un sistema
-mayor convendría separar incidentes, servicios y transiciones, pero hacerlo aquí
-añadiría complejidad sin una relación de dominio que la justifique.
+Los eventos usan UUID, UTC e índices por servicio/fecha y estado/severidad. Evidencia
+y remediación poseen claves foráneas con borrado en cascada. La observación completa
+se conserva como JSON para auditoría sin perder los campos normalizados necesarios
+para consultas y métricas.

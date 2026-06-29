@@ -1,0 +1,36 @@
+{
+  "schema_version": "1.0",
+  "thresholds": {
+    "latency_ms": 1500,
+    "ssl_expiry_days": 30,
+    "cpu_percent": 85,
+    "memory_percent": 90,
+    "disk_percent": 90,
+    "connections_percent": 85
+  },
+  "enabled": {
+    "http_4xx": true,
+    "http_5xx": true,
+    "timeout": true,
+    "dns": true,
+    "ssl_invalid": true,
+    "ssl_expiring": true,
+    "latency": true,
+    "port": true,
+    "service": true,
+    "container": true,
+    "application": true,
+    "page_changed": true,
+    "content": true,
+    "login": false,
+    "database": true,
+    "api": true,
+    "critical_resource": false,
+    "cpu": true,
+    "memory": true,
+    "disk": true,
+    "connections": false,
+    "docker": true,
+    "ssh": false
+  }
+}

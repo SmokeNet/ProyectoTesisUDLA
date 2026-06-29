@@ -87,6 +87,9 @@ def upsert_heartbeat(db: Session, payload: schemas.HeartbeatCreate) -> models.Se
     service.estado_actual = payload.status
     service.ultimo_heartbeat = timestamp
     service.actualizado_en = timestamp
+    # Sin una relacion ORM explicita SQLAlchemy no puede ordenar con certeza el
+    # INSERT padre antes de las metricas hijas. El flush hace efectiva la FK.
+    db.flush()
     if payload.latency_ms is not None:
         db.add(
             models.Metrica(

@@ -62,7 +62,8 @@ class SyntheticProbe:
                 observation.error_detail = str(error)
 
     def _platform(self, observation: Observation) -> None:
-        observation.cpu_percent = psutil.cpu_percent(interval=0.1)
+        # Una ventana de un segundo evita clasificar picos instantaneos como saturacion.
+        observation.cpu_percent = psutil.cpu_percent(interval=1.0)
         observation.memory_percent = psutil.virtual_memory().percent
         observation.disk_percent = psutil.disk_usage(str(Path.cwd().anchor)).percent
         try:
@@ -149,7 +150,6 @@ class SyntheticProbe:
         self._platform(observation)
         if observation.dns_ok is False or observation.port_open is False:
             return observation
-        started = time.perf_counter()
         try:
             with sync_playwright() as playwright:
                 browser = playwright.chromium.launch(headless=True)
@@ -162,13 +162,16 @@ class SyntheticProbe:
                         failed_resources.append(f"{response.status} {response.url}")
 
                 page.on("response", track_response)
+                navigation_started = time.perf_counter()
                 try:
                     response = page.goto(
                         self.settings.monitored_url,
                         wait_until="domcontentloaded",
                         timeout=self.settings.timeout_ms,
                     )
-                    observation.latency_ms = (time.perf_counter() - started) * 1000
+                    observation.latency_ms = (
+                        time.perf_counter() - navigation_started
+                    ) * 1000
                     observation.http_status = response.status if response else None
                     body = page.locator("body").inner_text()
                     observation.content_expected = self.settings.expected_text in body
@@ -180,7 +183,9 @@ class SyntheticProbe:
                     if not observation.content_expected:
                         observation.error_kind = observation.error_kind or "content"
                 except (PlaywrightTimeoutError, PlaywrightError) as error:
-                    observation.latency_ms = (time.perf_counter() - started) * 1000
+                    observation.latency_ms = (
+                        time.perf_counter() - navigation_started
+                    ) * 1000
                     detail = str(error)
                     observation.error_detail = detail
                     if "Timeout" in detail:

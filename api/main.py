@@ -74,6 +74,7 @@ def db_call(db: Session, operation: Callable[[], T]) -> T:
         return operation()
     except IntegrityError as error:
         db.rollback()
+        LOGGER.exception("Violacion de integridad en persistencia")
         raise HTTPException(status_code=409, detail="El recurso ya existe o viola una relacion") from error
     except SQLAlchemyError as error:
         db.rollback()

@@ -27,7 +27,7 @@ def _is_false(field: str) -> Callable[[Observation, dict[str, Any]], bool]:
 def _above(field: str, threshold_key: str) -> Callable[[Observation, dict[str, Any]], bool]:
     return lambda observation, config: (
         getattr(observation, field) is not None
-        and float(getattr(observation, field)) >= float(config[threshold_key])
+        and float(getattr(observation, field)) > float(config[threshold_key])
     )
 
 

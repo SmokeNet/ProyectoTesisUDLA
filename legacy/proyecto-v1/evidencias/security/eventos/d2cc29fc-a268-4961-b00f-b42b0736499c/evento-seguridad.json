@@ -1,0 +1,38 @@
+{
+  "schema_version": "1.0",
+  "generated_at": "2026-07-01T04:41:16.339543+00:00",
+  "event_id": "d2cc29fc-a268-4961-b00f-b42b0736499c",
+  "payload": {
+    "server": "security-gateway",
+    "service": "security-watcher",
+    "incident_type": "user_agent_sospechoso",
+    "level": "seguridad",
+    "severity": "media",
+    "cause": "Firma de herramienta automatizada en User-Agent",
+    "diagnosis": "Indicador heuristico; requiere correlacion y no prueba compromiso.",
+    "action_executed": "ninguna",
+    "result": "detectado",
+    "execution_time_ms": 0.0,
+    "recovery_time_ms": null,
+    "user": "sistema",
+    "robot": "security-watcher",
+    "final_status": "abierto",
+    "evidence_hash": null,
+    "evidence_path": null,
+    "detected_at": "2026-07-01T04:41:16.334299+00:00",
+    "recovered_at": null,
+    "observation": {
+      "access": {
+        "source_ip": "demo:ua",
+        "method": "GET",
+        "path": "/",
+        "user_agent": "sqlmap-demo",
+        "body_sample": "",
+        "status_code": null,
+        "occurred_at": "2026-07-01T04:41:16.334204+00:00"
+      },
+      "rule_id": "suspicious_user_agent"
+    },
+    "id": "d2cc29fc-a268-4961-b00f-b42b0736499c"
+  }
+}

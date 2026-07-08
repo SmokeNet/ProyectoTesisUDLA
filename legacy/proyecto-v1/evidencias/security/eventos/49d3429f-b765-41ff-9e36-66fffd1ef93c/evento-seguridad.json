@@ -1,0 +1,38 @@
+{
+  "schema_version": "1.0",
+  "generated_at": "2026-07-01T04:41:16.047824+00:00",
+  "event_id": "49d3429f-b765-41ff-9e36-66fffd1ef93c",
+  "payload": {
+    "server": "security-gateway",
+    "service": "security-watcher",
+    "incident_type": "inyeccion_sql_basica",
+    "level": "seguridad",
+    "severity": "alta",
+    "cause": "Patron compatible con SQL Injection basica",
+    "diagnosis": "La solicitud se rechazo por coincidencia defensiva; no se ejecuto payload.",
+    "action_executed": "ninguna",
+    "result": "detectado",
+    "execution_time_ms": 0.0,
+    "recovery_time_ms": null,
+    "user": "sistema",
+    "robot": "security-watcher",
+    "final_status": "abierto",
+    "evidence_hash": null,
+    "evidence_path": null,
+    "detected_at": "2026-07-01T04:41:16.037570+00:00",
+    "recovered_at": null,
+    "observation": {
+      "access": {
+        "source_ip": "demo:sqli",
+        "method": "GET",
+        "path": "/?id=1%20UNION%20SELECT%20demo",
+        "user_agent": "demo-defensiva/1.0",
+        "body_sample": "",
+        "status_code": null,
+        "occurred_at": "2026-07-01T04:41:16.037443+00:00"
+      },
+      "rule_id": "sqli_basic"
+    },
+    "id": "49d3429f-b765-41ff-9e36-66fffd1ef93c"
+  }
+}

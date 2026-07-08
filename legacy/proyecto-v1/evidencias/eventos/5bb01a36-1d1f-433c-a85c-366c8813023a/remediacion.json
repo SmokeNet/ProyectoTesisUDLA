@@ -1,0 +1,46 @@
+{
+  "schema_version": "1.0",
+  "generated_at": "2026-07-01T04:42:03.029486+00:00",
+  "event_id": "5bb01a36-1d1f-433c-a85c-366c8813023a",
+  "payload": {
+    "strategy": "escalate",
+    "attempted": false,
+    "success": false,
+    "escalated": true,
+    "reason": "estrategia requiere intervencion humana",
+    "action": "escalar",
+    "duration_ms": 0,
+    "state_before": {
+      "service": "sitio-vigilado",
+      "server": "localhost",
+      "target": "http://127.0.0.1:8080/",
+      "observed_at": "2026-07-01T04:41:51.361322+00:00",
+      "latency_ms": 126.26870000008239,
+      "http_status": 200,
+      "dns_ok": true,
+      "ssl_valid": null,
+      "ssl_days_remaining": null,
+      "port_open": true,
+      "content_expected": true,
+      "content_changed": false,
+      "login_ok": null,
+      "database_ok": true,
+      "api_ok": true,
+      "docker_ok": false,
+      "container_running": null,
+      "ssh_ok": null,
+      "cpu_percent": 65.9,
+      "memory_percent": 68.2,
+      "disk_percent": 37.3,
+      "connections_percent": 2.0,
+      "critical_resources_ok": true,
+      "error_kind": null,
+      "error_detail": null,
+      "content_hash": "5320417cd42c2d1c774409bfa86441a5bc1eb6f5d04d0354413370cbcc4d29bf",
+      "metadata": {
+        "failed_resources": []
+      }
+    },
+    "state_after": {}
+  }
+}

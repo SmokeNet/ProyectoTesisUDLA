@@ -1,0 +1,22 @@
+{
+  "schema_version": "1.0",
+  "mode": "defensive-controlled",
+  "thresholds": {
+    "flood_requests": 30,
+    "flood_window_seconds": 10,
+    "brute_force_attempts": 5,
+    "brute_force_window_seconds": 60,
+    "scan_unique_paths": 7,
+    "scan_window_seconds": 30,
+    "temporary_block_seconds": 60
+  },
+  "responses": {
+    "http_flood": "rate_limit",
+    "brute_force": "temporary_block",
+    "route_scan": "temporary_block",
+    "sqli_basic": "temporary_block",
+    "xss_basic": "temporary_block",
+    "suspicious_user_agent": "escalate"
+  },
+  "disclaimer": "Heuristicas educativas; no reemplazan WAF, SIEM ni SOC."
+}

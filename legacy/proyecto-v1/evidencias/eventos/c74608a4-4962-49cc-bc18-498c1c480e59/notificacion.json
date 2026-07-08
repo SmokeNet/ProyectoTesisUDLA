@@ -1,0 +1,10 @@
+{
+  "schema_version": "1.0",
+  "generated_at": "2026-07-01T04:46:51.032494+00:00",
+  "event_id": "c74608a4-4962-49cc-bc18-498c1c480e59",
+  "payload": {
+    "status": "simulated",
+    "reason": "SMTP no configurado; alerta conservada solo como evidencia",
+    "subject": "Alerta critica: docker_caido"
+  }
+}

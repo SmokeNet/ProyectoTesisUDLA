@@ -1,0 +1,38 @@
+{
+  "schema_version": "1.0",
+  "generated_at": "2026-07-01T04:41:17.364082+00:00",
+  "event_id": "b470eea5-d603-4d2f-8601-86ba9bb55f2b",
+  "payload": {
+    "server": "security-gateway",
+    "service": "security-watcher",
+    "incident_type": "flood_http",
+    "level": "seguridad",
+    "severity": "alta",
+    "cause": "Volumen HTTP sobre el umbral por origen",
+    "diagnosis": "31 solicitudes en 10 segundos.",
+    "action_executed": "ninguna",
+    "result": "detectado",
+    "execution_time_ms": 0.0,
+    "recovery_time_ms": null,
+    "user": "sistema",
+    "robot": "security-watcher",
+    "final_status": "abierto",
+    "evidence_hash": null,
+    "evidence_path": null,
+    "detected_at": "2026-07-01T04:41:17.358503+00:00",
+    "recovered_at": null,
+    "observation": {
+      "access": {
+        "source_ip": "demo:flood",
+        "method": "GET",
+        "path": "/",
+        "user_agent": "demo-defensiva/1.0",
+        "body_sample": "",
+        "status_code": null,
+        "occurred_at": "2026-07-01T04:41:17.358224+00:00"
+      },
+      "rule_id": "http_flood"
+    },
+    "id": "b470eea5-d603-4d2f-8601-86ba9bb55f2b"
+  }
+}

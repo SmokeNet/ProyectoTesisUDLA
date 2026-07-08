@@ -1,0 +1,38 @@
+{
+  "schema_version": "1.0",
+  "generated_at": "2026-07-01T04:41:16.225024+00:00",
+  "event_id": "ee3e9a6d-837a-4adf-89ae-d5f1b67e2cd5",
+  "payload": {
+    "server": "security-gateway",
+    "service": "security-watcher",
+    "incident_type": "xss_basico",
+    "level": "seguridad",
+    "severity": "alta",
+    "cause": "Patron compatible con XSS basico",
+    "diagnosis": "La solicitud se rechazo antes de alcanzar el sitio vigilado.",
+    "action_executed": "ninguna",
+    "result": "detectado",
+    "execution_time_ms": 0.0,
+    "recovery_time_ms": null,
+    "user": "sistema",
+    "robot": "security-watcher",
+    "final_status": "abierto",
+    "evidence_hash": null,
+    "evidence_path": null,
+    "detected_at": "2026-07-01T04:41:16.219381+00:00",
+    "recovered_at": null,
+    "observation": {
+      "access": {
+        "source_ip": "demo:xss",
+        "method": "GET",
+        "path": "/?q=%3Cscript%3Edemo%3C/script%3E",
+        "user_agent": "demo-defensiva/1.0",
+        "body_sample": "",
+        "status_code": null,
+        "occurred_at": "2026-07-01T04:41:16.219209+00:00"
+      },
+      "rule_id": "xss_basic"
+    },
+    "id": "ee3e9a6d-837a-4adf-89ae-d5f1b67e2cd5"
+  }
+}

@@ -1,0 +1,38 @@
+{
+  "schema_version": "1.0",
+  "generated_at": "2026-07-01T04:41:16.725477+00:00",
+  "event_id": "40548831-a707-4038-a2af-e79b76b52051",
+  "payload": {
+    "server": "security-gateway",
+    "service": "security-watcher",
+    "incident_type": "escaneo_rutas",
+    "level": "seguridad",
+    "severity": "media",
+    "cause": "Exploracion de multiples rutas desde un origen",
+    "diagnosis": "7 rutas unicas en 30 segundos.",
+    "action_executed": "ninguna",
+    "result": "detectado",
+    "execution_time_ms": 0.0,
+    "recovery_time_ms": null,
+    "user": "sistema",
+    "robot": "security-watcher",
+    "final_status": "abierto",
+    "evidence_hash": null,
+    "evidence_path": null,
+    "detected_at": "2026-07-01T04:41:16.720332+00:00",
+    "recovered_at": null,
+    "observation": {
+      "access": {
+        "source_ip": "demo:scan",
+        "method": "GET",
+        "path": "/debug",
+        "user_agent": "demo-defensiva/1.0",
+        "body_sample": "",
+        "status_code": null,
+        "occurred_at": "2026-07-01T04:41:16.720143+00:00"
+      },
+      "rule_id": "route_scan"
+    },
+    "id": "40548831-a707-4038-a2af-e79b76b52051"
+  }
+}

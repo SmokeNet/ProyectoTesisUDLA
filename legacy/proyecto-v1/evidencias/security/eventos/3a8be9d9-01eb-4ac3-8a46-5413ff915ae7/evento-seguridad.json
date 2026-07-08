@@ -1,0 +1,38 @@
+{
+  "schema_version": "1.0",
+  "generated_at": "2026-07-01T04:41:16.526728+00:00",
+  "event_id": "3a8be9d9-01eb-4ac3-8a46-5413ff915ae7",
+  "payload": {
+    "server": "security-gateway",
+    "service": "security-watcher",
+    "incident_type": "fuerza_bruta_simulada",
+    "level": "seguridad",
+    "severity": "alta",
+    "cause": "Intentos repetidos sobre una ruta de autenticacion",
+    "diagnosis": "5 intentos en 60 segundos.",
+    "action_executed": "ninguna",
+    "result": "detectado",
+    "execution_time_ms": 0.0,
+    "recovery_time_ms": null,
+    "user": "sistema",
+    "robot": "security-watcher",
+    "final_status": "abierto",
+    "evidence_hash": null,
+    "evidence_path": null,
+    "detected_at": "2026-07-01T04:41:16.521922+00:00",
+    "recovered_at": null,
+    "observation": {
+      "access": {
+        "source_ip": "demo:brute",
+        "method": "POST",
+        "path": "/login",
+        "user_agent": "demo-defensiva/1.0",
+        "body_sample": "usuario=demo&clave=no-es-un-secreto",
+        "status_code": null,
+        "occurred_at": "2026-07-01T04:41:16.521666+00:00"
+      },
+      "rule_id": "brute_force"
+    },
+    "id": "3a8be9d9-01eb-4ac3-8a46-5413ff915ae7"
+  }
+}
